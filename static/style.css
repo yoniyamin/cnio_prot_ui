@@ -290,7 +290,6 @@ html:not(.light-mode) .tile-icon {
 
 .cnio-logo {
   max-height: 80px;
-  margin-bottom: 1rem;
 }
 
 html:not(.light-mode) .invert-on-dark {
@@ -332,15 +331,230 @@ html.light-mode .invert-on-dark {
 }
 
 .section-container {
-  background-color: var(--tile-bg-clr);
-  padding: 1.5rem;
+  position: relative;
+  padding: 2rem;
   border-radius: 1rem;
   margin-bottom: 2rem;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  background-color: var(--tile-bg-clr, #1f1f28);
+  overflow: hidden;
+  z-index: 0;
+  border: 2px solid transparent;
 }
+
+
 
 .section-container h3 {
   margin-top: 0;
   margin-bottom: 1rem;
   color: var(--accent-clr);
+}
+
+@media (max-width: 800px) {
+  /* Ensure all main content has enough bottom margin */
+  main {
+    margin-bottom: 70px; /* Match or exceed the navbar height */
+  }
+
+  /* Increase the margin for home-wrapper to accommodate submenu expansion */
+  .home-wrapper {
+    margin-bottom: 130px; /* Increased from 80px to handle submenu */
+  }
+
+  /* Ensure navbar stays above other elements */
+  #sidebar {
+    z-index: 100;
+  }
+
+  /* Make section containers respect the spacing */
+  .section-container:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* File path input styling */
+.file-path-container {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.file-path-display {
+  flex-grow: 1;
+  background-color: var(--input-bg-clr);
+  color: var(--text-clr);
+  padding: 0.6em 0.8em;
+  border: 1px solid var(--line-clr);
+  border-radius: 0.4em;
+  font-family: inherit;
+}
+
+.file-path-display.error {
+  border-color: #ff4136;
+  box-shadow: 0 0 0 1px #ff4136;
+}
+
+.file-select-btn {
+  background-color: var(--accent-clr);
+  color: white;
+  border: none;
+  border-radius: 0.4em;
+  padding: 0.5em 1em;
+  cursor: pointer;
+  font-weight: 500;
+  min-width: 80px;
+  transition: background-color 0.2s ease;
+}
+
+.file-select-btn:hover {
+  background-color: #1a6fc4;
+}
+
+/* Checkbox group styling */
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-clr);
+}
+
+/* Form action buttons */
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.action-button {
+  padding: 0.7em 1.5em;
+  border-radius: 0.4em;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.action-button.primary {
+  background-color: var(--accent-clr);
+  color: white;
+}
+
+.action-button.primary:hover {
+  background-color: #1a6fc4;
+}
+
+.action-button.secondary {
+  background-color: transparent;
+  color: var(--text-clr);
+  border: 1px solid var(--line-clr);
+}
+
+.action-button.secondary:hover {
+  background-color: var(--hover-clr);
+}
+
+/* Select styling improvements */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.7em center;
+  background-size: 1em;
+  padding-right: 2.5em;
+}
+
+html.light-mode select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+/* Make the MaxQuant form look better */
+#maxquant-form {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Add extra white space at the bottom on mobile to prevent navbar overlap */
+@media (max-width: 800px) {
+  main {
+    margin-bottom: 80px; /* Adjusted for mobile navbar height */
+  }
+
+  form {
+    margin-bottom: 40px;
+  }
+
+  /* Improve mobile checkbox layout */
+  .checkbox-group {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Stack form actions on mobile */
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .action-button {
+    width: 100%;
+  }
+}
+
+/* Loading state for file inputs */
+.file-path-display.loading {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='xMidYMid'%3E%3Ccircle cx='50' cy='50' fill='none' stroke='%232f80ed' stroke-width='10' r='35' stroke-dasharray='164.93361431346415 56.97787143782138'%3E%3CanimateTransform attributeName='transform' type='rotate' repeatCount='indefinite' dur='1s' values='0 50 50;360 50 50' keyTimes='0;1'%3E%3C/animateTransform%3E%3C/circle%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7em center;
+  background-size: 1.2em;
+  padding-right: 2.5em;
+  color: var(--secondary-text-clr);
+}
+
+/* Form submission result container */
+.submission-result {
+  margin-top: 2rem;
+  padding: 1rem;
+  border-radius: 0.4rem;
+  background-color: var(--tile-bg-clr);
+  border: 1px solid var(--accent-clr);
+  display: none;
+}
+
+/* Make the submit button show loading state */
+.action-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Improve tooltip and helper text */
+.helper-text {
+  font-size: 0.85rem;
+  color: var(--secondary-text-clr);
+  margin-top: 0.2rem;
+}
+
+/* File validation state */
+.file-path-display.warning {
+  border-color: #ff9900;
+  box-shadow: 0 0 0 1px #ff9900;
+  background-color: rgba(255, 153, 0, 0.1);
+}
+
+/* Improve focus states for better accessibility */
+input:focus,
+select:focus,
+button:focus {
+  outline: 2px solid var(--accent-clr);
+  outline-offset: 2px;
 }

@@ -1,5 +1,519 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>DIA-NN</h2>
-<p>This is the DIA-NN page content.</p>
+<h2>DIA-NN Search</h2>
+
+<div class="section-container">
+  <form id="diann-form" method="POST" action="{{ url_for('diann') }}" enctype="multipart/form-data">
+
+    <div class="input-row">
+      <label for="job_name">Job Name:</label>
+      <input type="text" id="job_name" name="job_name" placeholder="My DIA-NN Analysis">
+    </div>
+
+    <div class="input-row">
+      <label for="fasta_file">FASTA File:</label>
+      <div class="file-path-container">
+        <input type="text" id="fasta_file_display" class="file-path-display" readonly placeholder="Select FASTA file">
+        <input type="hidden" id="fasta_file" name="fasta_file">
+        <button type="button" class="file-select-btn" onclick="selectFile('fasta_file', '.fasta')">Browse</button>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <label for="conditions_file">Conditions File:</label>
+      <div class="file-path-container">
+        <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
+        <input type="hidden" id="conditions_file" name="conditions_file">
+        <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
+      </div>
+      <div class="helper-text">
+        <button type="button" class="action-button secondary" style="padding: 0.3em 0.6em; margin-top: 0.5em;" onclick="downloadExampleConditionFile()">Download Example</button>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <label for="output_folder">Output Folder:</label>
+      <div class="file-path-container">
+        <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
+        <input type="hidden" id="output_folder" name="output_folder">
+        <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <label for="diann_path">DIA-NN Path:</label>
+      <div class="file-path-container">
+        <input type="text" id="diann_path_display" class="file-path-display" readonly placeholder="Path to DiaNN.exe">
+        <input type="hidden" id="diann_path" name="diann_path">
+        <button type="button" class="file-select-btn" onclick="selectFile('diann_path', '.exe')">Browse</button>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <label for="msconvert_path">MSConvert Path:</label>
+      <div class="file-path-container">
+        <input type="text" id="msconvert_path_display" class="file-path-display" readonly placeholder="Path to msconvert.exe">
+        <input type="hidden" id="msconvert_path" name="msconvert_path">
+        <button type="button" class="file-select-btn" onclick="selectFile('msconvert_path', '.exe')">Browse</button>
+      </div>
+    </div>
+
+    <!-- Tab view for additional parameters -->
+    <div class="tab-container" style="margin-top: 20px; border: 1px solid var(--line-clr); border-radius: 0.4em;">
+      <div class="tab-header" style="display: flex; border-bottom: 1px solid var(--line-clr);">
+        <button type="button" class="tab-button active" onclick="openTab(event, 'basic-params')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-clr); cursor: pointer; border-bottom: 2px solid var(--accent-clr);">Basic Parameters</button>
+        <button type="button" class="tab-button" onclick="openTab(event, 'adv-params')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-clr); cursor: pointer;">Advanced Parameters</button>
+      </div>
+
+      <div id="basic-params" class="tab-content" style="padding: 15px; display: block;">
+        <div class="input-row">
+          <label for="missed_cleavage">Missed Cleavages:</label>
+          <input type="number" id="missed_cleavage" name="missed_cleavage" value="1" min="0" max="3">
+        </div>
+
+        <div class="input-row">
+          <label for="max_var_mods">Maximum Variable Modifications:</label>
+          <input type="number" id="max_var_mods" name="max_var_mods" value="2" min="0" max="5">
+        </div>
+
+        <div class="input-row">
+          <label>Modifications:</label>
+          <div class="checkbox-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_nterm_m_excision" name="mod_nterm_m_excision" checked>
+              <label for="mod_nterm_m_excision">N-term M excision</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_c_carb" name="mod_c_carb" checked>
+              <label for="mod_c_carb">C carbamidomethylation</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_ox_m" name="mod_ox_m" checked>
+              <label for="mod_ox_m">Ox(M)</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_ac_nterm" name="mod_ac_nterm">
+              <label for="mod_ac_nterm">Ac(N-term)</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_phospho" name="mod_phospho">
+              <label for="mod_phospho">Phospho</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="mod_k_gg" name="mod_k_gg">
+              <label for="mod_k_gg">K-GG</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div class="checkbox-item">
+            <input type="checkbox" id="mbr" name="mbr">
+            <label for="mbr">Match between runs (MBR)</label>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label for="threads">Number of Threads:</label>
+          <input type="number" id="threads" name="threads" value="20" min="1" max="64">
+        </div>
+      </div>
+
+      <div id="adv-params" class="tab-content" style="padding: 15px; display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div class="input-row">
+            <label>Peptide Length Range:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" id="peptide_length_min" name="peptide_length_min" value="7" min="3" max="20" style="width: 70px;">
+              <span>to</span>
+              <input type="number" id="peptide_length_max" name="peptide_length_max" value="30" min="10" max="50" style="width: 70px;">
+            </div>
+          </div>
+
+          <div class="input-row">
+            <label>Precursor Charge Range:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" id="precursor_charge_min" name="precursor_charge_min" value="2" min="1" max="4" style="width: 70px;">
+              <span>to</span>
+              <input type="number" id="precursor_charge_max" name="precursor_charge_max" value="4" min="2" max="6" style="width: 70px;">
+            </div>
+          </div>
+
+          <div class="input-row">
+            <label>Precursor m/z Range:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" id="precursor_min" name="precursor_min" value="390" min="300" max="600" style="width: 70px;">
+              <span>to</span>
+              <input type="number" id="precursor_max" name="precursor_max" value="1050" min="800" max="2000" style="width: 70px;">
+            </div>
+          </div>
+
+          <div class="input-row">
+            <label>Fragment m/z Range:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" id="fragment_min" name="fragment_min" value="200" min="100" max="400" style="width: 70px;">
+              <span>to</span>
+              <input type="number" id="fragment_max" name="fragment_max" value="1800" min="1000" max="3000" style="width: 70px;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="action-button primary">Run DIA-NN</button>
+      <button type="button" class="action-button secondary" onclick="saveAllDefaults()">Save Defaults</button>
+      <button type="reset" class="action-button secondary">Reset Form</button>
+    </div>
+  </form>
+
+  <!-- Result container will be shown here after submission -->
+  <div id="submission-result" class="submission-result" style="display:none;"></div>
+</div>
+
+<script>
+  // Tab functionality
+  function openTab(evt, tabName) {
+    var i, tabContent, tabButtons;
+
+    // Hide all tab content
+    tabContent = document.getElementsByClassName("tab-content");
+    for (i = 0; i < tabContent.length; i++) {
+      tabContent[i].style.display = "none";
+    }
+
+    // Remove "active" class from all tab buttons
+    tabButtons = document.getElementsByClassName("tab-button");
+    for (i = 0; i < tabButtons.length; i++) {
+      tabButtons[i].className = tabButtons[i].className.replace(" active", "");
+      tabButtons[i].style.borderBottom = "none";
+    }
+
+    // Show the current tab and add "active" class to the button
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.className += " active";
+    evt.currentTarget.style.borderBottom = "2px solid var(--accent-clr)";
+  }
+
+  // Function to download example condition file
+  function downloadExampleConditionFile() {
+      // Check if running in webview by checking if pywebview is available
+      const isWebView = typeof window.pywebview !== 'undefined';
+
+      if (isWebView) {
+        console.log("Using webview download method");
+        // In webview - get content and use API to save
+        fetch('/api/download-diann-example?webview=true')
+          .then(response => response.json())
+          .then(data => {
+            console.log("Got example data from server");
+            // Call the API function to save
+            window.pywebview.api.save_example_file(data.content, data.filename)
+              .then(result => {
+                console.log("Save result:", result);
+                if (result.success) {
+                  alert(`Example file saved to ${result.path}`);
+                } else if (!result.canceled) {
+                  alert('Error saving file: ' + (result.error || 'Unknown error'));
+                }
+              })
+              .catch(error => {
+                console.error("Error saving file:", error);
+                alert('Error saving file. Please check the console for details.');
+              });
+          })
+          .catch(error => {
+            console.error("Error downloading example file:", error);
+            alert('Error downloading example file');
+          });
+      } else {
+        console.log("Using browser download method");
+        // In regular browser - use normal download approach
+        fetch('/api/download-diann-example')
+          .then(response => {
+            if (response.ok) {
+              return response.blob();
+            }
+            throw new Error('Network response was not ok');
+          })
+          .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'diann_conditions_example.tsv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(error => {
+            console.error("Error downloading example file:", error);
+            alert('Error downloading example file');
+          });
+      }
+    }
+
+  // Function to select a file
+  function selectFile(fieldId, fileTypes) {
+    // Show loading indicator
+    const displayField = document.getElementById(fieldId + '_display');
+    const originalValue = displayField.value;
+    displayField.value = "Selecting file...";
+    displayField.classList.add('loading');
+
+    // Bring window to front first
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.show_window) {
+    window.pywebview.api.show_window();
+  }
+
+    // Use a Flask API endpoint instead of direct pywebview API
+    fetch(`/api/select-file?types=${fileTypes}`)
+      .then(response => response.json())
+      .then(data => {
+        displayField.classList.remove('loading');
+
+        if (data.path) {
+          // Check if there's an error about extension
+          if (data.error) {
+            // Clear the field on error
+            document.getElementById(fieldId).value = "";
+            displayField.value = "";
+            displayField.classList.remove('warning');
+
+            // Show error alert
+            alert(data.error);
+          } else {
+            // Set the path value
+            document.getElementById(fieldId).value = data.path;
+            displayField.value = data.path;
+            displayField.classList.remove('warning');
+          }
+        } else {
+          // User canceled dialog, restore original value
+          displayField.value = originalValue;
+        }
+      })
+      .catch(error => {
+        displayField.classList.remove('loading');
+        displayField.value = originalValue;
+        console.error("Error selecting file:", error);
+      });
+  }
+
+  // Function to save all default values
+  function saveAllDefaults() {
+    // Collect all the parameters into a single object
+    const params = {
+      module: 'diann',
+      defaults: {
+        // Paths
+        diann_path: document.getElementById('diann_path').value,
+        msconvert_path: document.getElementById('msconvert_path').value,
+
+        // Basic parameters
+        missed_cleavage: document.getElementById('missed_cleavage').value,
+        max_var_mods: document.getElementById('max_var_mods').value,
+        threads: document.getElementById('threads').value,
+
+        // Checkboxes
+        mod_nterm_m_excision: document.getElementById('mod_nterm_m_excision').checked,
+        mod_c_carb: document.getElementById('mod_c_carb').checked,
+        mod_ox_m: document.getElementById('mod_ox_m').checked,
+        mod_ac_nterm: document.getElementById('mod_ac_nterm').checked,
+        mod_phospho: document.getElementById('mod_phospho').checked,
+        mod_k_gg: document.getElementById('mod_k_gg').checked,
+        mbr: document.getElementById('mbr').checked,
+
+        // Advanced parameters
+        peptide_length_min: document.getElementById('peptide_length_min').value,
+        peptide_length_max: document.getElementById('peptide_length_max').value,
+        precursor_charge_min: document.getElementById('precursor_charge_min').value,
+        precursor_charge_max: document.getElementById('precursor_charge_max').value,
+        precursor_min: document.getElementById('precursor_min').value,
+        precursor_max: document.getElementById('precursor_max').value,
+        fragment_min: document.getElementById('fragment_min').value,
+        fragment_max: document.getElementById('fragment_max').value
+      }
+    };
+
+    // Send a single request with all parameters
+    fetch('/api/save-all-defaults', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      // Show confirmation
+      alert('Default values have been saved!');
+    })
+    .catch(error => {
+      console.error("Error saving defaults:", error);
+      alert('Error saving defaults. Please check the console for details.');
+    });
+  }
+
+  // Load default values when page loads
+  window.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/get-defaults?module=diann')
+      .then(response => response.json())
+      .then(defaults => {
+        if (defaults) {
+          // Set paths if present
+          if (defaults.diann_path) {
+            document.getElementById('diann_path').value = defaults.diann_path;
+            document.getElementById('diann_path_display').value = defaults.diann_path;
+          }
+
+          if (defaults.msconvert_path) {
+            document.getElementById('msconvert_path').value = defaults.msconvert_path;
+            document.getElementById('msconvert_path_display').value = defaults.msconvert_path;
+          }
+
+          // Set numeric inputs
+          if (defaults.missed_cleavage) {
+            document.getElementById('missed_cleavage').value = defaults.missed_cleavage;
+          }
+
+          if (defaults.max_var_mods) {
+            document.getElementById('max_var_mods').value = defaults.max_var_mods;
+          }
+
+          if (defaults.threads) {
+            document.getElementById('threads').value = defaults.threads;
+          }
+
+          // Set checkboxes
+          if (defaults.mod_nterm_m_excision !== undefined) {
+            document.getElementById('mod_nterm_m_excision').checked = defaults.mod_nterm_m_excision;
+          }
+
+          if (defaults.mod_c_carb !== undefined) {
+            document.getElementById('mod_c_carb').checked = defaults.mod_c_carb;
+          }
+
+          if (defaults.mod_ox_m !== undefined) {
+            document.getElementById('mod_ox_m').checked = defaults.mod_ox_m;
+          }
+
+          if (defaults.mod_ac_nterm !== undefined) {
+            document.getElementById('mod_ac_nterm').checked = defaults.mod_ac_nterm;
+          }
+
+          if (defaults.mod_phospho !== undefined) {
+            document.getElementById('mod_phospho').checked = defaults.mod_phospho;
+          }
+
+          if (defaults.mod_k_gg !== undefined) {
+            document.getElementById('mod_k_gg').checked = defaults.mod_k_gg;
+          }
+
+          if (defaults.mbr !== undefined) {
+            document.getElementById('mbr').checked = defaults.mbr;
+          }
+
+          // Advanced parameters
+          if (defaults.peptide_length_min) {
+            document.getElementById('peptide_length_min').value = defaults.peptide_length_min;
+          }
+
+          if (defaults.peptide_length_max) {
+            document.getElementById('peptide_length_max').value = defaults.peptide_length_max;
+          }
+
+          if (defaults.precursor_charge_min) {
+            document.getElementById('precursor_charge_min').value = defaults.precursor_charge_min;
+          }
+
+          if (defaults.precursor_charge_max) {
+            document.getElementById('precursor_charge_max').value = defaults.precursor_charge_max;
+          }
+
+          if (defaults.precursor_min) {
+            document.getElementById('precursor_min').value = defaults.precursor_min;
+          }
+
+          if (defaults.precursor_max) {
+            document.getElementById('precursor_max').value = defaults.precursor_max;
+          }
+
+          if (defaults.fragment_min) {
+            document.getElementById('fragment_min').value = defaults.fragment_min;
+          }
+
+          if (defaults.fragment_max) {
+            document.getElementById('fragment_max').value = defaults.fragment_max;
+          }
+        }
+      })
+      .catch(error => {
+        console.error("Error loading default values:", error);
+      });
+  });
+
+  // Form submission - validation and saving defaults
+  document.getElementById('diann-form').addEventListener('submit', function(event) {
+    event.preventDefault(); // Prevent traditional form submission
+
+    // Check required fields
+    const requiredFields = ['fasta_file', 'conditions_file', 'output_folder', 'diann_path'];
+    let missingFields = false;
+
+    requiredFields.forEach(field => {
+      if (!document.getElementById(field).value) {
+        document.getElementById(field + '_display').classList.add('error');
+        missingFields = true;
+      } else {
+        document.getElementById(field + '_display').classList.remove('error');
+      }
+    });
+
+    if (missingFields) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    // Show submission status
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting...';
+    submitBtn.disabled = true;
+
+    // Collect form data
+    const formData = new FormData(document.getElementById('diann-form'));
+
+    // Submit form via fetch API
+    fetch('{{ url_for('diann') }}', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.text())
+    .then(result => {
+      // Display result in a result container
+      const resultContainer = document.getElementById('submission-result');
+      resultContainer.innerHTML = result;
+      resultContainer.style.display = 'block';
+      resultContainer.scrollIntoView({ behavior: 'smooth' });
+
+      // Reset button
+      submitBtn.textContent = originalBtnText;
+      submitBtn.disabled = false;
+    })
+    .catch(error => {
+      console.error('Error submitting form:', error);
+      alert('Error submitting form. Please try again.');
+
+      // Reset button
+      submitBtn.textContent = originalBtnText;
+      submitBtn.disabled = false;
+    });
+  });
+</script>
 {% endblock %}

@@ -2,52 +2,321 @@
 {% block content %}
 <h2>MaxQuant Run</h2>
 
-<div class="container">
-  <form method="POST" action="{{ url_for('maxquant') }}" enctype="multipart/form-data">
+<div class="section-container">
+  <form id="maxquant-form" method="POST" action="{{ url_for('maxquant') }}" enctype="multipart/form-data">
+
+    <div class="input-row">
+      <label for="job_name">Job Name:</label>
+      <input type="text" id="job_name" name="job_name" placeholder="My MaxQuant Analysis">
+    </div>
 
     <div class="input-row">
       <label for="fasta_folder">Fasta Folder:</label>
-      <input type="file" id="fasta_folder" name="fasta_folder" webkitdirectory directory multiple required>
+      <div class="file-path-container">
+        <input type="text" id="fasta_folder_display" class="file-path-display" readonly placeholder="Select FASTA directory">
+        <input type="hidden" id="fasta_folder" name="fasta_folder">
+        <button type="button" class="file-select-btn" onclick="selectDirectory('fasta_folder')">Browse</button>
+      </div>
     </div>
 
     <div class="input-row">
       <label for="output_folder">Output Folder:</label>
-      <input type="file" id="output_folder" name="output_folder" webkitdirectory directory multiple required>
+      <div class="file-path-container">
+        <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
+        <input type="hidden" id="output_folder" name="output_folder">
+        <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
+      </div>
     </div>
 
     <div class="input-row">
       <label for="conditions_file">Conditions File:</label>
-      <input type="file" id="conditions_file" name="conditions_file" accept=".xlsx,.tsv,.txt" required>
+      <div class="file-path-container">
+        <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
+        <input type="hidden" id="conditions_file" name="conditions_file">
+        <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
+      </div>
     </div>
 
     <div class="input-row">
-      <label for="database_choices">Select Databases:</label>
-      <select id="database_choices" name="database_choices" multiple required>
-        <option value="HUMAN">HUMAN</option>
-        <option value="MOUSE">MOUSE</option>
-        <option value="YEAST">YEAST</option>
-      </select>
+      <label for="mq_path">MaxQuant Path:</label>
+      <div class="file-path-container">
+        <input type="text" id="mq_path_display" class="file-path-display" readonly placeholder="Path to MaxQuantCmd.exe">
+        <input type="hidden" id="mq_path" name="mq_path">
+        <button type="button" class="file-select-btn" onclick="selectFile('mq_path', '.exe')">Browse</button>
+      </div>
     </div>
 
     <div class="input-row">
       <label for="mq_version">MaxQuant Version:</label>
-      <input type="text" id="mq_version" name="mq_version" placeholder="2.1.4.0" required>
+      <select id="mq_version" name="mq_version" required>
+        <option value="2.1.4.0">2.1.4.0</option>
+        <option value="2.1.3.0">2.1.3.0</option>
+        <option value="2.0.3.0">2.0.3.0</option>
+        <option value="1.6.17.0">1.6.17.0</option>
+      </select>
     </div>
 
     <div class="input-row">
-      <label for="mq_path">MaxQuant Path (MaxQuantCmd.exe):</label>
-      <input type="file" id="mq_path" name="mq_path" accept=".exe" required>
+      <label>Select Databases:</label>
+      <div class="checkbox-group">
+        <div class="checkbox-item">
+          <input type="checkbox" id="db_human" name="database_choices" value="HUMAN">
+          <label for="db_human">Human</label>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="db_mouse" name="database_choices" value="MOUSE">
+          <label for="db_mouse">Mouse</label>
+        </div>
+        <div class="checkbox-item">
+          <input type="checkbox" id="db_yeast" name="database_choices" value="YEAST">
+          <label for="db_yeast">Yeast</label>
+        </div>
+      </div>
     </div>
 
-    <div class="input-row">
-      <label for="job_name">Job Name:</label>
-      <input type="text" id="job_name" name="job_name" placeholder="Optional">
-    </div>
-
-    <div style="margin-top: 1em;">
-      <button type="submit">Run MaxQuant</button>
+    <div class="form-actions">
+      <button type="submit" class="action-button primary">Run MaxQuant</button>
+      <button type="button" class="action-button secondary" onclick="saveAllDefaults()">Save Defaults</button>
+      <button type="reset" class="action-button secondary">Reset Form</button>
     </div>
 
   </form>
+
+  <!-- Result container will be shown here after submission -->
+  <div id="submission-result" class="submission-result" style="display:none;"></div>
 </div>
+
+<script>
+  // Function to select a directory
+  function selectDirectory(fieldId) {
+    // Show loading indicator
+    const displayField = document.getElementById(fieldId + '_display');
+    const originalValue = displayField.value;
+    displayField.value = "Selecting directory...";
+    displayField.classList.add('loading');
+
+    // Bring window to front first
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.show_window) {
+        window.pywebview.api.show_window();
+      }
+
+    // Use a Flask API endpoint instead of direct pywebview API
+    fetch('/api/select-directory')
+      .then(response => response.json())
+      .then(data => {
+        displayField.classList.remove('loading');
+        if (data.path) {
+          document.getElementById(fieldId).value = data.path;
+          displayField.value = data.path;
+        } else {
+          // User canceled dialog, restore original value
+          displayField.value = originalValue;
+        }
+      })
+      .catch(error => {
+        displayField.classList.remove('loading');
+        displayField.value = originalValue;
+        console.error("Error selecting directory:", error);
+      });
+  }
+
+  // Function to select a file
+  function selectFile(fieldId, fileTypes) {
+    // Show loading indicator
+    const displayField = document.getElementById(fieldId + '_display');
+    const originalValue = displayField.value;
+    displayField.value = "Selecting file...";
+    displayField.classList.add('loading');
+
+    // Use a Flask API endpoint instead of direct pywebview API
+    fetch(`/api/select-file?types=${fileTypes}`)
+      .then(response => response.json())
+      .then(data => {
+        displayField.classList.remove('loading');
+
+        if (data.path) {
+          // Check if there's an error about extension
+          if (data.error) {
+            // Clear the field on error
+            document.getElementById(fieldId).value = "";
+            displayField.value = "";
+            displayField.classList.remove('warning');
+
+            // Show error alert
+            alert(data.error);
+          } else {
+            // Set the path value
+            document.getElementById(fieldId).value = data.path;
+            displayField.value = data.path;
+            displayField.classList.remove('warning');
+
+            // Note: Removed the automatic saving of defaults here
+          }
+        } else {
+          // User canceled dialog, restore original value
+          displayField.value = originalValue;
+        }
+      })
+      .catch(error => {
+        displayField.classList.remove('loading');
+        displayField.value = originalValue;
+        console.error("Error selecting file:", error);
+      });
+  }
+
+  // Function to save all default values manually - improved version
+  function saveAllDefaults() {
+    // Collect all parameters into a single object
+    const params = {
+      module: 'maxquant',
+      defaults: {
+        // Paths and core parameters
+        mq_path: document.getElementById('mq_path').value,
+        mq_version: document.getElementById('mq_version').value,
+
+        // Database selections - grab any checked databases
+        database_choices: Array.from(
+          document.querySelectorAll('input[name="database_choices"]:checked')
+        ).map(checkbox => checkbox.value)
+      }
+    };
+
+    // Only include values that are not empty
+    Object.keys(params.defaults).forEach(key => {
+      if (!params.defaults[key] ||
+          (Array.isArray(params.defaults[key]) && params.defaults[key].length === 0)) {
+        delete params.defaults[key];
+      }
+    });
+
+    // Send a single request with all parameters
+    fetch('/api/save-all-defaults', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      // Show confirmation
+      alert('Default values have been saved!');
+    })
+    .catch(error => {
+      console.error("Error saving defaults:", error);
+      alert('Error saving defaults. Please check the console for details.');
+    });
+  }
+
+  // Load default values when page loads
+  window.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/get-defaults?module=maxquant')
+      .then(response => response.json())
+      .then(defaults => {
+        if (defaults) {
+          // Set MQ path if present
+          if (defaults.mq_path) {
+            document.getElementById('mq_path').value = defaults.mq_path;
+            document.getElementById('mq_path_display').value = defaults.mq_path;
+          }
+
+          // Set MQ version if present
+          if (defaults.mq_version) {
+            document.getElementById('mq_version').value = defaults.mq_version;
+          }
+
+          // Set database checkboxes if present
+          if (defaults.database_choices && Array.isArray(defaults.database_choices)) {
+            // Uncheck all first
+            document.querySelectorAll('input[name="database_choices"]').forEach(checkbox => {
+              checkbox.checked = false;
+            });
+
+            // Check the ones in defaults
+            defaults.database_choices.forEach(dbValue => {
+              const checkbox = document.querySelector(`input[name="database_choices"][value="${dbValue}"]`);
+              if (checkbox) {
+                checkbox.checked = true;
+              }
+            });
+          }
+        }
+      })
+      .catch(error => {
+        console.error("Error loading default values:", error);
+      });
+  });
+
+  // Form submission - validation but no automatic default saving
+  document.getElementById('maxquant-form').addEventListener('submit', function(event) {
+    event.preventDefault(); // Prevent traditional form submission
+
+    // Check if at least one database is selected
+    const databaseChoices = document.querySelectorAll('input[name="database_choices"]:checked');
+    if (databaseChoices.length === 0) {
+      alert('Please select at least one database');
+      return;
+    }
+
+    // Check required fields
+    const requiredFields = ['fasta_folder', 'output_folder', 'conditions_file', 'mq_path'];
+    let missingFields = false;
+
+    requiredFields.forEach(field => {
+      if (!document.getElementById(field).value) {
+        document.getElementById(field + '_display').classList.add('error');
+        missingFields = true;
+      } else {
+        document.getElementById(field + '_display').classList.remove('error');
+      }
+    });
+
+    if (missingFields) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    // Note: Removed automatic saving of defaults here
+
+    // Show submission status
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting...';
+    submitBtn.disabled = true;
+
+    // Collect form data
+    const formData = new FormData(document.getElementById('maxquant-form'));
+
+    // Submit form via fetch API
+    fetch('{{ url_for('maxquant') }}', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.text())
+    .then(result => {
+      // Display result in a result container
+      const resultContainer = document.getElementById('submission-result');
+      resultContainer.innerHTML = result;
+      resultContainer.style.display = 'block';
+      resultContainer.scrollIntoView({ behavior: 'smooth' });
+
+      // Reset button
+      submitBtn.textContent = originalBtnText;
+      submitBtn.disabled = false;
+    })
+    .catch(error => {
+      console.error('Error submitting form:', error);
+      alert('Error submitting form. Please try again.');
+
+      // Reset button
+      submitBtn.textContent = originalBtnText;
+      submitBtn.disabled = false;
+    });
+  });
+</script>
 {% endblock %}

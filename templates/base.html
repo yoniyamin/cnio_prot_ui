@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Home</title>
+  <title>Proteomics Core</title>
+     <link rel="icon" type="image/ico" href="{{ url_for('static', filename='favicon.ico') }}">
 
   <!-- Use Flask's url_for to reference static files -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -12,6 +13,7 @@
 <body>
 <button id="theme-toggle" class="theme-toggle">🌙</button>
   <nav id="sidebar">
+
     <ul>
       <!-- Brand + Toggle Button -->
       <li>
