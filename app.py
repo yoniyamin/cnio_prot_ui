@@ -3,7 +3,8 @@ import io
 import json
 import logging
 import sys
-from datetime import datetime, time
+import time
+from datetime import datetime
 from PIL import Image
 import threading
 import webview
@@ -71,92 +72,80 @@ def create_icon():
 
 
 def setup_tray():
-    """Setup the system tray icon and menu"""
     global tray_icon
-
     logger.info("Setting up system tray icon")
-
-    # Create the icon
     icon = create_icon()
 
-    # Define the menu with the restore function as a separate function
     def do_restore():
-        logger.info("Activating restore from menu")
+        logger.info("Activating restore from tray")
         restore_window()
 
     def do_quit():
         logger.info("Activating quit from menu")
         quit_app()
 
-    # Create menu
-    menu = (
-        pystray.MenuItem('Show', do_restore),
+    # Define the menu with 'Show' as the default action for double-click
+    menu = pystray.Menu(
+        pystray.MenuItem('Show', do_restore, default=True),  # Default action on double-click
         pystray.MenuItem('Quit', do_quit)
     )
 
-    # Create the icon with the menu
-    tray_icon = pystray.Icon('Proteomics UI', icon, 'Proteomics Core UI', menu)
+    tray_icon = pystray.Icon(
+        'Proteomics UI',
+        icon,
+        'Proteomics Core UI',
+        menu=menu
+    )
 
-    # Define a separate callback for the icon activation (usually double-click)
-    def on_activate(icon, button, time):
-        logger.info(f"Tray icon activated with button {button}")
-        if button == 1:  # Left click (primary click)
-            restore_window()
-
-    # Set the callback
-    tray_icon.on_click = on_activate
-
-    # Start the icon in a separate thread
     tray_thread = threading.Thread(target=tray_icon.run)
     tray_thread.daemon = True
     tray_thread.start()
-
     logger.info("System tray setup complete")
 
 
 def restore_window():
-    """Restore the window from the system tray"""
     logger.info("Restoring window from system tray")
     if window:
         try:
-            # Show the window
+            # Make the window visible
             window.show()
             logger.info("Window show() called")
 
-            # Try to ensure window is active and visible on Windows
+            # Attempt to restore using pywebview's API if available
+            try:
+                window.restore()  # Restore from minimized state
+                logger.info("Window restore() called")
+            except AttributeError:
+                logger.debug("window.restore() not available, falling back to platform-specific method")
+
+            # Ensure the window is brought to the foreground on Windows
             import platform
             if platform.system() == 'Windows':
                 try:
                     import win32gui
                     import win32con
-                    hwnd = None
 
-                    # Try to find the window handle
-                    def callback(hwnd, extra):
-                        if win32gui.GetWindowText(hwnd).startswith("Proteomics Core UI"):
-                            nonlocal found_hwnd
-                            found_hwnd = hwnd
-                            return False
+                    # Log all window titles and class names to identify the correct one
+                    hwnds = []
+                    def callback(hwnd, hwnds):
+                        title = win32gui.GetWindowText(hwnd)
+                        class_name = win32gui.GetClassName(hwnd)
+                        logger.debug(f"Window title: {title}, class: {class_name}")
+                        # Adjust this condition based on logged output
+                        if "Proteomics Core UI" in title and "Chrome" in class_name:  # CEF window class might include "Chrome"
+                            hwnds.append(hwnd)
                         return True
 
-                    found_hwnd = None
-                    win32gui.EnumWindows(callback, None)
-
-                    if found_hwnd:
-                        # Make window visible and bring to front
-                        win32gui.ShowWindow(found_hwnd, win32con.SW_RESTORE)
-                        win32gui.SetForegroundWindow(found_hwnd)
-                        logger.info(f"Window activated using win32gui: {found_hwnd}")
+                    win32gui.EnumWindows(callback, hwnds)
+                    if hwnds:
+                        hwnd = hwnds[0]
+                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)  # Restore from minimized
+                        win32gui.SetForegroundWindow(hwnd)  # Bring to front
+                        logger.info(f"Window activated using win32gui: {hwnd}")
+                    else:
+                        logger.warning("Could not find window handle matching criteria (No action Needed)")
                 except Exception as we:
                     logger.warning(f"Windows-specific activation failed: {we}")
-
-            # As a last resort, try JavaScript focus
-            try:
-                window.evaluate_js("window.focus(); console.log('Window focused via JS');")
-                logger.info("JavaScript focus command executed")
-            except Exception as je:
-                logger.warning(f"JavaScript focus failed: {je}")
-
         except Exception as e:
             logger.error(f"Error restoring window: {str(e)}", exc_info=True)
     else:
