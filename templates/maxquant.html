@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>MaxQuant Run</h2>
+
+<div class="container">
+  <form method="POST" action="{{ url_for('maxquant') }}" enctype="multipart/form-data">
+
+    <div class="input-row">
+      <label for="fasta_folder">Fasta Folder:</label>
+      <input type="file" id="fasta_folder" name="fasta_folder" webkitdirectory directory multiple required>
+    </div>
+
+    <div class="input-row">
+      <label for="output_folder">Output Folder:</label>
+      <input type="file" id="output_folder" name="output_folder" webkitdirectory directory multiple required>
+    </div>
+
+    <div class="input-row">
+      <label for="conditions_file">Conditions File:</label>
+      <input type="file" id="conditions_file" name="conditions_file" accept=".xlsx,.tsv,.txt" required>
+    </div>
+
+    <div class="input-row">
+      <label for="database_choices">Select Databases:</label>
+      <select id="database_choices" name="database_choices" multiple required>
+        <option value="HUMAN">HUMAN</option>
+        <option value="MOUSE">MOUSE</option>
+        <option value="YEAST">YEAST</option>
+      </select>
+    </div>
+
+    <div class="input-row">
+      <label for="mq_version">MaxQuant Version:</label>
+      <input type="text" id="mq_version" name="mq_version" placeholder="2.1.4.0" required>
+    </div>
+
+    <div class="input-row">
+      <label for="mq_path">MaxQuant Path (MaxQuantCmd.exe):</label>
+      <input type="file" id="mq_path" name="mq_path" accept=".exe" required>
+    </div>
+
+    <div class="input-row">
+      <label for="job_name">Job Name:</label>
+      <input type="text" id="job_name" name="job_name" placeholder="Optional">
+    </div>
+
+    <div style="margin-top: 1em;">
+      <button type="submit">Run MaxQuant</button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

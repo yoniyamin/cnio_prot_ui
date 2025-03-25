@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home</title>
+
+  <!-- Use Flask's url_for to reference static files -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+<button id="theme-toggle" class="theme-toggle">🌙</button>
+  <nav id="sidebar">
+    <ul>
+      <!-- Brand + Toggle Button -->
+      <li>
+        <span class="logo">Proteomics Core</span>
+        <button onclick="toggleSidebar()" id="toggle-btn">
+          <!-- “Double chevron left” icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
+               width="24px" fill="#e8eaed">
+            <path d="m313-480 155 156q11 11 11.5 27.5T468-268q-11 11-28 11t-28-11L228-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15
+                     t8.5-13l184-184q11-11 27.5-11.5T468-692q11 11 11 28t-11 28L313-480Zm264 0 155 156q11 11 11.5 27.5T732-268q-11 11-28
+                     11t-28-11L492-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l184-184q11-11 27.5-11.5T732-692q11 11 11 28t-11 28L577-480Z"/>
+          </svg>
+        </button>
+      </li>
+
+      <!-- Home -->
+      <li class="active">
+        <a href="{{ url_for('home') }}">
+          <!-- “Home” icon -->
+          <img src="{{ url_for('static', filename='icons/logo.svg') }}" alt="Profile" class="icon">
+          <span>Home</span>
+        </a>
+      </li>
+
+      <!-- Searches -->
+      <li>
+        <button onclick="toggleSubMenu(this)" class="dropdown-btn">
+          <img src="{{ url_for('static', filename='icons/search.svg') }}" alt="Profile" class="icon">
+          <span>Searches</span>
+          <!-- “Keyboard arrow down” icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
+               width="24px" fill="#e8eaed">
+            <path d="M480-361q-8 0-15-2.5t-13-8.5L268-556q-11-11-11-28t11-28q11-11 28-11t28 11l156 156 156-156q11-11 28-11t28
+                     11q11 11 11 28t-11 28L508-372q-6 6-13 8.5t-15 2.5Z"/>
+          </svg>
+        </button>
+        <ul class="sub-menu">
+          <div>
+            <li><a href="{{ url_for('maxquant') }}">MaxQuant</a></li>
+            <li><a href="{{ url_for('diann') }}">DIA-NN</a></li>
+            <li><a href="{{ url_for('spectronaut') }}">Spectronaut</a></li>
+            <li><a href="{{ url_for('quantms') }}">QuantMS Analysis</a></li>
+          </div>
+        </ul>
+      </li>
+
+      <!-- Pipelines -->
+      <li>
+        <button onclick="toggleSubMenu(this)" class="dropdown-btn">
+          <img src="{{ url_for('static', filename='icons/pipeline.svg') }}" alt="Profile icon" class="icon" />
+          <span>Pipelines</span>
+          <!-- “Keyboard arrow down” icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
+               width="24px" fill="#e8eaed">
+            <path d="M480-361q-8 0-15-2.5t-13-8.5L268-556q-11-11-11-28t11-28q11-11 28-11t28
+                     11l156 156 156-156q11-11 28-11t28 11q11 11 11 28t-11 28L508-372q-6 6-13 8.5t-15
+                     2.5Z"/>
+          </svg>
+        </button>
+        <ul class="sub-menu">
+          <div>
+            <li><a href="{{ url_for('gelbandido') }}">GelBandIDo</a></li>
+            <li><a href="{{ url_for('dianalyzer') }}">DIAnalyzer</a></li>
+          </div>
+        </ul>
+      </li>
+
+      <!-- Job Monitor -->
+      <li>
+        <a href="{{ url_for('job_monitor') }}">
+          <img src="{{ url_for('static', filename='icons/checklist_24dp_E8EAED_FILL0_wght400_GRAD0_opsz24.svg') }}" alt="Profile icon" class="icon" />
+          <span>Job Monitor</span>
+        </a>
+      </li>
+
+      <!-- Configuration -->
+      <li>
+        <a href="{{ url_for('config') }}">
+          <!-- “Person” icon or any relevant icon -->
+          <img src="{{ url_for('static', filename='icons/settings.svg') }}" alt="Profile icon" class="icon" />
+          <span>Configuration</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+<main>
+  {% block content %}
+  <div class="container">
+    <h2>Welcome To CNIO Proteomics Core Unit</h2>
+    <p>
+        The User interface will allow you to easily execute the different searches,
+        As well as running different analysis pipelines to produce Reports.
+    </p>
+  </div>
+  {% endblock %}
+</main>
+
+</body>
+</html>
