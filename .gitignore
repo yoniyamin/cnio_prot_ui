@@ -2,3 +2,4 @@
 /defaults/maxquant_defaults.json
 /logs/
 .venv
+/defaults/

@@ -9,8 +9,8 @@ from PIL import Image
 import threading
 import webview
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
-from components.searches.run_maxquant import MaxQuant_handler
-from components.searches.diann_handler import DIANNHandler, launch_diann_job
+from components.handlers.run_maxquant import MaxQuant_handler
+from components.handlers.diann_handler import DIANNHandler, launch_diann_job
 
 try:
     import pystray
