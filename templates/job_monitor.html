@@ -1,5 +1,274 @@
 {% extends 'base.html' %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+    <script type="module" src="{{ url_for('static', filename='watchers.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='jobs.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='job_monitor.js') }}"></script>
+{% endblock %}
+
 {% block content %}
-<h2>Job Monitor</h2>
-<p>This is the Job Monitor page content.</p>
+<div class="page-header">
+  <h2>Job Monitor</h2>
+  <p class="subtitle">Manage file watchers and running jobs</p>
+</div>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>File Watchers</h3>
+    <button id="create-watcher-btn" class="action-button primary">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      <span>New Watcher</span>
+    </button>
+  </div>
+
+  <div class="controls-row">
+    <div class="filter-controls">
+      <button id="refresh-watchers" class="action-button secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+        </svg>
+        <span>Refresh</span>
+      </button>
+      <div class="select-wrapper">
+        <select id="status-filter" class="filter-select">
+          <option value="all">All Status</option>
+          <option value="monitoring">Monitoring</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="paused">Paused</option>
+        </select>
+      </div>
+    </div>
+    <div class="search-controls">
+      <div class="search-wrapper">
+        <svg xmlns="http://www.w3.org/2000/svg" class="search-icon h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+        </svg>
+        <input type="text" id="watcher-search" class="search-input" placeholder="Search watchers...">
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="watchers-table" class="data-table">
+      <thead>
+        <tr>
+          <th data-sort="id" class="sort-desc">ID</th>
+          <th data-sort="name">Name</th>
+          <th data-sort="status">Status</th>
+          <th data-sort="folder_path">Folder Path</th>
+          <th data-sort="file_pattern">File Pattern</th>
+          <th data-sort="progress">Progress</th>
+          <th data-sort="creation_time">Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="8" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Loading watchers...</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination-controls">
+    <button class="pagination-button" id="prev-page" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+      </svg>
+      <span>Previous</span>
+    </button>
+    <div class="pagination-info">
+      Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+    </div>
+    <button class="pagination-button" id="next-page" disabled>
+      <span>Next</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>Running Jobs</h3>
+  </div>
+
+  <div class="table-container">
+    <table id="jobs-table" class="data-table">
+      <thead>
+        <tr>
+          <th data-sort="id" class="sort-desc">ID</th>
+          <th data-sort="name">Name</th>
+          <th data-sort="status">Status</th>
+          <th data-sort="type">Type</th>
+          <th data-sort="progress">Progress</th>
+          <th data-sort="creation_time">Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="7" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Loading jobs...</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Watcher Details Template (hidden, used for expansion) -->
+<template id="watcher-details-template">
+  <tr class="watcher-details-row">
+    <td colspan="8" class="details-container">
+      <div class="details-content">
+        <div class="details-header">
+          <h4>Captured Files</h4>
+          <div class="details-actions">
+            <button class="action-button secondary refresh-files">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table files-table">
+            <thead>
+              <tr>
+                <th data-sort="file_name">File Name</th>
+                <th data-sort="file_path">File Path</th>
+                <th data-sort="capture_time">Captured</th>
+                <th data-sort="job_id">Job ID</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="5" class="loading-message">
+                  <div class="loading-spinner"></div>
+                  <span>Loading files...</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </td>
+  </tr>
+</template>
+
+<!-- Create Watcher Modal -->
+<div id="create-watcher-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3>Create New File Watcher</h3>
+      <button id="close-modal" class="modal-close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form id="watcher-form">
+        <div class="form-group">
+          <label for="folder_path">Folder to Watch</label>
+          <div class="input-with-button">
+            <input type="text" id="folder_path" name="folder_path" readonly placeholder="Select folder to monitor">
+            <button type="button" id="select-folder-btn" class="action-button secondary">Browse</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="file_pattern">File Pattern</label>
+          <input type="text" id="file_pattern" name="file_pattern" placeholder="*.txt;*.csv">
+          <div class="helper-text">Use semicolons to separate multiple patterns (e.g., *.raw;*.mzml)</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="job_type">Job Type</label>
+            <select id="job_type" name="job_type">
+              <option value="MaxQuant_Handler">MaxQuant</option>
+              <option value="DIANN_Handler">DIA-NN</option>
+              <option value="Spectronaut_Handler">Spectronaut</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="job_demands">Resource Demands</label>
+            <select id="job_demands" name="job_demands">
+              <option value="light">Light</option>
+              <option value="medium">Medium</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="job_name_prefix">Job Name Prefix</label>
+          <input type="text" id="job_name_prefix" name="job_name_prefix" placeholder="Auto_Job">
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-watcher" class="action-button secondary">Cancel</button>
+          <button type="submit" class="action-button primary">Create Watcher</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container modal-sm">
+    <div class="modal-header">
+      <h3>Confirm Action</h3>
+      <button class="modal-close confirm-cancel">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p id="confirm-message">Are you sure you want to perform this action?</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="action-button secondary confirm-cancel">Cancel</button>
+      <button id="confirm-action" class="action-button danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast-notification" class="toast-container">
+  <div class="toast-content">
+    <div class="toast-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    <div class="toast-message">Operation completed successfully</div>
+    <button class="toast-close">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+      </svg>
+    </button>
+  </div>
+</div>
 {% endblock %}

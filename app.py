@@ -5,13 +5,11 @@ import logging
 import sys
 import time
 from datetime import datetime
-from PIL import Image
 import threading
 import webview
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
-from components.handlers.run_maxquant import MaxQuant_handler
-from components.handlers.diann_handler import DIANNHandler, launch_diann_job
-
+from src.handlers.run_maxquant import MaxQuant_handler
+from src.handlers.diann_handler import DIANNHandler, launch_diann_job
 try:
     import pystray
     from PIL import Image
@@ -827,6 +825,255 @@ def config():
     return render_template('config.html')
 
 
+# Enhanced API endpoints for file watcher integration
+
+@app.route('/api/watchers')
+def api_get_watchers():
+    """Get all watchers from the database with enhanced information"""
+    try:
+        logger.info("API request: get watchers")
+        from src.database.watcher_db import WatcherDB
+
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+        db = WatcherDB(db_path)
+
+        # Get status filter if provided
+        status_param = request.args.get('status')
+
+        # Handle multiple statuses separated by commas
+        if status_param:
+            statuses = status_param.split(',')
+            watchers = []
+            for status in statuses:
+                watchers.extend(db.get_watchers(status=status.strip()))
+        else:
+            watchers = db.get_watchers()
+
+        # Format the data for JSON response
+        watcher_list = []
+        for w in watchers:
+            # Get captured files count for each watcher
+            captured_files = db.get_captured_files(w[0])
+            captured_count = len(captured_files)
+
+            # Calculate expected files count if pattern doesn't have wildcards
+            expected_count = 0
+            file_patterns = w[2].split(';')
+            exact_patterns = [p.strip() for p in file_patterns if not any(c in "*?[" for c in p)]
+            expected_count = len(exact_patterns) if exact_patterns else 0
+
+            watcher_list.append({
+                "id": w[0],
+                "folder_path": w[1],
+                "file_pattern": w[2],
+                "job_type": w[3],
+                "job_demands": w[4],
+                "job_name_prefix": w[5],
+                "creation_time": w[6],
+                "execution_time": w[7],
+                "status": w[8],
+                "completion_time": w[9],
+                "captured_count": captured_count,
+                "expected_count": expected_count
+            })
+
+        return jsonify({"watchers": watcher_list})
+    except Exception as e:
+        logger.error(f"Error getting watchers: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/watchers/<int:watcher_id>/files')
+def api_get_captured_files(watcher_id):
+    """Get captured files for a specific watcher"""
+    try:
+        logger.info(f"API request: get captured files for watcher {watcher_id}")
+        from src.database.watcher_db import WatcherDB
+
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+        db = WatcherDB(db_path)
+
+        files = db.get_captured_files(watcher_id)
+
+        # Format the data for JSON response
+        file_list = []
+        for f in files:
+            file_list.append({
+                "id": f[0],
+                "job_id": f[1],
+                "watcher_id": f[2],
+                "file_name": f[3],
+                "file_path": f[4],
+                "capture_time": f[5]
+            })
+
+        # Get watcher details to check expected files
+        watchers = db.get_watchers()
+        watcher = next((w for w in watchers if w[0] == watcher_id), None)
+
+        if watcher:
+            # Get expected files based on file pattern if no wildcards
+            file_patterns = watcher[2].split(';')
+            expected_files = [p.strip() for p in file_patterns if not any(c in "*?[" for c in p)]
+
+            # Find which expected files are not captured yet
+            captured_filenames = [f["file_name"] for f in file_list]
+            missing_files = []
+
+            for expected in expected_files:
+                if expected not in captured_filenames:
+                    missing_files.append({
+                        "id": None,
+                        "job_id": None,
+                        "watcher_id": watcher_id,
+                        "file_name": expected,
+                        "file_path": os.path.join(watcher[1], expected),
+                        "capture_time": None,
+                        "status": "pending"
+                    })
+
+            # Add missing files to the response
+            file_list.extend(missing_files)
+
+        return jsonify({"files": file_list})
+    except Exception as e:
+        logger.error(f"Error getting captured files: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/watchers/<int:watcher_id>/update-status', methods=['POST'])
+def api_update_watcher_status(watcher_id):
+    """Update a watcher's status"""
+    try:
+        data = request.json
+        if not data or 'status' not in data:
+            return jsonify({"error": "Missing status parameter"}), 400
+
+        new_status = data['status']
+        if new_status not in ['monitoring', 'completed', 'cancelled', 'paused']:
+            return jsonify({"error": f"Invalid status: {new_status}"}), 400
+
+        logger.info(f"API request: update watcher {watcher_id} status to {new_status}")
+        from src.database.watcher_db import WatcherDB
+
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+        db = WatcherDB(db_path)
+
+        db.update_watcher_status(watcher_id, new_status)
+
+        # Update completion time if status is completed or cancelled
+        if new_status in ['completed', 'cancelled']:
+            current_time = datetime.now().isoformat()
+            db.conn.execute("UPDATE watchers SET completion_time = ? WHERE id = ?", (current_time, watcher_id))
+            db.conn.commit()
+
+        return jsonify({"success": True, "message": f"Watcher {watcher_id} status updated to {new_status}"})
+    except Exception as e:
+        logger.error(f"Error updating watcher status: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/watchers', methods=['POST'])
+def api_create_watcher():
+    """Create a new file watcher"""
+    try:
+        data = request.json
+        required_fields = ['folder_path', 'file_pattern', 'job_type', 'job_demands', 'job_name_prefix']
+
+        # Validate required fields
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        logger.info(f"API request: create new watcher for {data['folder_path']}")
+        from src.database.watcher_db import WatcherDB
+
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+        db = WatcherDB(db_path)
+
+        # Ensure folder exists
+        if not os.path.isdir(data['folder_path']):
+            try:
+                os.makedirs(data['folder_path'], exist_ok=True)
+                logger.info(f"Created watcher directory: {data['folder_path']}")
+            except Exception as e:
+                logger.error(f"Error creating watcher directory: {str(e)}", exc_info=True)
+                return jsonify({"error": f"Could not create directory: {str(e)}"}), 400
+
+        watcher_id = db.add_watcher(
+            folder_path=data['folder_path'],
+            file_pattern=data['file_pattern'],
+            job_type=data['job_type'],
+            job_demands=data['job_demands'],
+            job_name_prefix=data['job_name_prefix']
+        )
+
+        # Start the watcher in the WatcherManager
+        # Here you would typically trigger the WatcherManager to load and start the new watcher
+        try:
+            # Import here to avoid circular imports
+            from src.watchers.watcher_manager import WatcherManager
+            from src.core.job_queue_manager import JobQueueManager
+
+            # Initialize job queue manager if not exists
+            job_queue_manager = JobQueueManager(db_path=db_path)
+
+            # Create and start a single watcher
+            watcher_manager = WatcherManager(db, job_queue_manager)
+            watcher = watcher_manager.create_single_watcher(watcher_id)
+
+            # Start the watcher in a separate thread
+            import threading
+            thread = threading.Thread(target=watcher.start, daemon=True)
+            thread.start()
+
+            logger.info(f"Started new watcher {watcher_id} in thread")
+        except Exception as e:
+            logger.error(f"Error starting watcher {watcher_id}: {str(e)}", exc_info=True)
+            # Continue anyway since the watcher is created in the database
+
+        return jsonify({"success": True, "watcher_id": watcher_id})
+    except Exception as e:
+        logger.error(f"Error creating watcher: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/jobs')
+def api_get_jobs():
+    """Get running jobs from the queue manager"""
+    try:
+        logger.info("API request: get jobs")
+
+        # This is a placeholder - in a real implementation, you would retrieve
+        # jobs from your JobQueueManager or a job database
+        from src.core.job_queue_manager import JobQueueManager
+
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+        job_queue_manager = JobQueueManager(db_path=db_path)
+
+        # Convert job dictionary to JSON-serializable format
+        jobs = []
+
+        # Add running jobs
+        for job_id, job in job_queue_manager.running_jobs.items():
+            jobs.append(job.to_dict())
+
+        # Add waiting jobs
+        with job_queue_manager.waiting_jobs_lock:
+            for job in job_queue_manager.waiting_jobs:
+                jobs.append(job.to_dict())
+
+        # Add queued jobs
+        with job_queue_manager.queued_jobs_lock:
+            for job in job_queue_manager.queued_jobs:
+                jobs.append(job.to_dict())
+
+        return jsonify({"jobs": jobs})
+    except Exception as e:
+        logger.error(f"Error getting jobs: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 def start_flask():
     app.run(debug=False, port=5000)
 
@@ -870,3 +1117,6 @@ if __name__ == "__main__":
 
     except Exception as e:
         logger.critical(f"Fatal error starting application: {str(e)}", exc_info=True)
+
+
+

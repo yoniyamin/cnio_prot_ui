@@ -19,7 +19,7 @@ print(f"Ensured test directory exists at: {test_folder}")
 
 watcher_id = db.add_watcher(
     folder_path=str(test_folder),
-    file_pattern="1.txt;2.txt;3.txt",
+    file_pattern="4.txt;5.txt;6.txt",
     job_type="diann_handler",
     job_demands="cpu:1",
     job_name_prefix="test_diann_job"

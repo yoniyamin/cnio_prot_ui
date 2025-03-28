@@ -9,6 +9,7 @@
   <!-- Use Flask's url_for to reference static files -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
 <button id="theme-toggle" class="theme-toggle">🌙</button>

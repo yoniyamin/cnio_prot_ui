@@ -1,6 +1,8 @@
 # src/watchers/watcher_manager.py
 import threading
 import time
+
+from app import logger
 from src.watchers.file_watcher import FileWatcher
 
 class WatcherManager:
@@ -35,3 +37,26 @@ class WatcherManager:
             if thread.is_alive():
                 thread.join(timeout=5)  # Timeout to prevent hanging
         self.threads.clear()
+
+    def create_single_watcher(self, watcher_id):
+        """Create and return a single FileWatcher without starting it."""
+        logger.info(f"Creating FileWatcher for ID: {watcher_id}")
+        watcher = FileWatcher(watcher_id, self.db, self.job_queue_manager)
+        self.watchers[watcher_id] = watcher
+        return watcher
+
+    def stop_watcher(self, watcher_id):
+        """Stop a specific watcher."""
+        if watcher_id in self.watchers:
+            logger.info(f"Stopping watcher {watcher_id}")
+            self.watchers[watcher_id].stop()
+
+            # If there's a thread for this watcher, wait for it to finish
+            if watcher_id in self.threads:
+                self.threads[watcher_id].join(timeout=5)
+                del self.threads[watcher_id]
+
+            # Remove from active watchers
+            del self.watchers[watcher_id]
+            return True
+        return False
