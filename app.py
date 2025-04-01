@@ -10,6 +10,12 @@ import webview
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from src.handlers.run_maxquant import MaxQuant_handler
 from src.handlers.diann_handler import DIANNHandler, launch_diann_job
+from src.database.watcher_db import WatcherDB
+
+
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
+watcher_db = WatcherDB(db_path)
+
 try:
     import pystray
     from PIL import Image
@@ -824,7 +830,12 @@ def config():
     logger.info("Route: config")
     return render_template('config.html')
 
-
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    return response
 # Enhanced API endpoints for file watcher integration
 
 @app.route('/api/watchers')
@@ -834,8 +845,7 @@ def api_get_watchers():
         logger.info("API request: get watchers")
         from src.database.watcher_db import WatcherDB
 
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
-        db = WatcherDB(db_path)
+        db = watcher_db
 
         # Get status filter if provided
         status_param = request.args.get('status')
@@ -876,7 +886,7 @@ def api_get_watchers():
                 "captured_count": captured_count,
                 "expected_count": expected_count
             })
-
+        logger.info("Returning watchers data")
         return jsonify({"watchers": watcher_list})
     except Exception as e:
         logger.error(f"Error getting watchers: {str(e)}", exc_info=True)
@@ -943,7 +953,6 @@ def api_get_captured_files(watcher_id):
 
 @app.route('/api/watchers/<int:watcher_id>/update-status', methods=['POST'])
 def api_update_watcher_status(watcher_id):
-    """Update a watcher's status"""
     try:
         data = request.json
         if not data or 'status' not in data:
@@ -954,18 +963,9 @@ def api_update_watcher_status(watcher_id):
             return jsonify({"error": f"Invalid status: {new_status}"}), 400
 
         logger.info(f"API request: update watcher {watcher_id} status to {new_status}")
-        from src.database.watcher_db import WatcherDB
-
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
-        db = WatcherDB(db_path)
-
-        db.update_watcher_status(watcher_id, new_status)
-
-        # Update completion time if status is completed or cancelled
-        if new_status in ['completed', 'cancelled']:
-            current_time = datetime.now().isoformat()
-            db.conn.execute("UPDATE watchers SET completion_time = ? WHERE id = ?", (current_time, watcher_id))
-            db.conn.commit()
+        global watcher_db
+        watcher_db.update_watcher_status(watcher_id, new_status)
+        # No need for separate completion_time update; handled in update_watcher_status
 
         return jsonify({"success": True, "message": f"Watcher {watcher_id} status updated to {new_status}"})
     except Exception as e:

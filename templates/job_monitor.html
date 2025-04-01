@@ -5,6 +5,7 @@
     <script type="module" src="{{ url_for('static', filename='watchers.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='jobs.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='job_monitor.js') }}"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -56,19 +57,18 @@
     <table id="watchers-table" class="data-table">
       <thead>
         <tr>
-          <th data-sort="id" class="sort-desc">ID</th>
-          <th data-sort="name">Name</th>
-          <th data-sort="status">Status</th>
-          <th data-sort="folder_path">Folder Path</th>
-          <th data-sort="file_pattern">File Pattern</th>
-          <th data-sort="progress">Progress</th>
-          <th data-sort="creation_time">Created</th>
-          <th>Actions</th>
+          <th data-sort="id" class="sort-desc col-id">ID</th>
+          <th data-sort="name" class="col-name">Name</th>
+          <th data-sort="status" class="col-status">Status</th>
+          <th data-sort="file_pattern" class="col-pattern">Pattern</th>
+          <th data-sort="progress" class="col-progress">Progress</th>
+          <th data-sort="creation_time" class="col-created">Created</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td colspan="8" class="loading-message">
+          <td colspan="7" class="loading-message">
             <div class="loading-spinner"></div>
             <span>Loading watchers...</span>
           </td>
@@ -105,13 +105,13 @@
     <table id="jobs-table" class="data-table">
       <thead>
         <tr>
-          <th data-sort="id" class="sort-desc">ID</th>
-          <th data-sort="name">Name</th>
-          <th data-sort="status">Status</th>
-          <th data-sort="type">Type</th>
-          <th data-sort="progress">Progress</th>
-          <th data-sort="creation_time">Created</th>
-          <th>Actions</th>
+          <th data-sort="id" class="sort-desc col-id">ID</th>
+          <th data-sort="name" class="col-name">Name</th>
+          <th data-sort="status" class="col-status">Status</th>
+          <th data-sort="type" class="col-type">Type</th>
+          <th data-sort="progress" class="col-progress">Progress</th>
+          <th data-sort="creation_time" class="col-created">Created</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -129,7 +129,7 @@
 <!-- Watcher Details Template (hidden, used for expansion) -->
 <template id="watcher-details-template">
   <tr class="watcher-details-row">
-    <td colspan="8" class="details-container">
+    <td colspan="7" class="details-container">
       <div class="details-content">
         <div class="details-header">
           <h4>Captured Files</h4>
@@ -148,14 +148,13 @@
               <tr>
                 <th data-sort="file_name">File Name</th>
                 <th data-sort="file_path">File Path</th>
-                <th data-sort="capture_time">Captured</th>
                 <th data-sort="job_id">Job ID</th>
-                <th>Status</th>
+                <th data-sort="status">Status</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td colspan="5" class="loading-message">
+                <td colspan="4" class="loading-message">
                   <div class="loading-spinner"></div>
                   <span>Loading files...</span>
                 </td>

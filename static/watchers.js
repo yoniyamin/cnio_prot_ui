@@ -5,6 +5,8 @@
  * sort watchers, expand watchers, etc.
  ************************************/
 
+import { createProgressBar, formatDate } from './utils.js';
+
 // ===== Global variables for watchers =====
 let watchersData = [];
 let filteredWatchers = [];
@@ -22,7 +24,7 @@ export function loadWatchers(showLoading = true) {
   if (showLoading) {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="8" class="loading-message">
+        <td colspan="7" class="loading-message">
           <div class="loading-spinner"></div>
           <span>Loading watchers...</span>
         </td>
@@ -36,20 +38,72 @@ export function loadWatchers(showLoading = true) {
     apiUrl += `?status=${statusFilter}`;
   }
 
+  console.log("Fetching watchers from:", apiUrl);
+
   fetch(apiUrl)
-    .then((response) => response.json())
+    .then((response) => {
+      console.log(`Watchers API response status: ${response.status}`);
+      return response.json();
+    })
     .then((data) => {
+      console.log("Watchers API full response:", data);
+
+      // Log structure analysis to help debug property names
+      if (data.watchers && data.watchers.length > 0) {
+        const watcher = data.watchers[0];
+        console.log("First watcher data:", watcher);
+
+        // Extract and log all property names available in the watcher object
+        console.log("All watcher properties:", Object.keys(watcher));
+
+        // Check for common progress-related properties
+        console.log("Progress-related properties found:", {
+          processed_files: watcher.processed_files,
+          total_files: watcher.total_files,
+          captured_count: watcher.captured_count,
+          expected_count: watcher.expected_count,
+          progress_percent: watcher.progress_percent,
+          // Look deeper for nested properties
+          files_array: Array.isArray(watcher.files) ? watcher.files.length : null,
+          expected_files: Array.isArray(watcher.expected_files) ? watcher.expected_files.length : null
+        });
+
+        // Check for file tracking in the watcher object
+        if (watcher.files) {
+          console.log("Watcher has 'files' property:", watcher.files);
+        }
+      }
+
       if (data.error) {
         tableBody.innerHTML = `
           <tr>
-            <td colspan="8" class="loading-message">
+            <td colspan="7" class="loading-message">
               <span class="text-red-500">Error: ${data.error}</span>
             </td>
           </tr>`;
         return;
       }
 
-      watchersData = data.watchers || [];
+      // Check for alternate data structures
+      let watchersArray = [];
+      if (Array.isArray(data)) {
+        // Direct array response
+        watchersArray = data;
+      } else if (data.watchers && Array.isArray(data.watchers)) {
+        // Object with watchers array
+        watchersArray = data.watchers;
+      } else {
+        // Try to find any array property
+        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+        if (arrayProps.length > 0) {
+          watchersArray = data[arrayProps[0]];
+        } else {
+          console.error("Could not find watchers array in response", data);
+          watchersArray = [];
+        }
+      }
+
+      watchersData = watchersArray;
       filterAndDisplayWatchers();
       reExpandWatchers();
     })
@@ -57,8 +111,8 @@ export function loadWatchers(showLoading = true) {
       console.error('Error loading watchers:', error);
       tableBody.innerHTML = `
         <tr>
-          <td colspan="8" class="loading-message">
-            <span class="text-red-500">Failed to load watchers</span>
+          <td colspan="7" class="loading-message">
+            <span class="text-red-500">Failed to load watchers: ${error.message}</span>
           </td>
         </tr>`;
     });
@@ -89,94 +143,264 @@ export function filterAndDisplayWatchers() {
 
 // ====== Sort watchers table ======
 function sortWatchers() {
-  filteredWatchers.sort((a, b) => {
-    const { column, ascending } = currentWatcherSort;
-    let aValue, bValue;
+  // Use the global variables rather than function parameters
+  const sortBy = currentWatcherSort.column;
+  const ascending = currentWatcherSort.ascending;
 
-    switch (column) {
-      case 'id':
-        aValue = a.id;
-        bValue = b.id;
-        break;
-      case 'name':
-        aValue = a.job_name_prefix;
-        bValue = b.job_name_prefix;
-        break;
-      case 'status':
-        aValue = a.status;
-        bValue = b.status;
-        break;
-      case 'folder_path':
-        aValue = a.folder_path;
-        bValue = b.folder_path;
-        break;
-      case 'file_pattern':
-        aValue = a.file_pattern;
-        bValue = b.file_pattern;
-        break;
-      case 'progress':
-        aValue = calcProgressValue(a);
-        bValue = calcProgressValue(b);
-        break;
-      case 'creation_time':
-        aValue = new Date(a.creation_time);
-        bValue = new Date(b.creation_time);
-        break;
-      default:
-        aValue = a.id;
-        bValue = b.id;
-    }
+  // Sort the filtered watchers array based on current sort settings
+  if (Array.isArray(filteredWatchers)) {
+    filteredWatchers.sort((a, b) => {
+      // Add null checks to handle missing properties
+      if (!a || !b) return 0;
 
-    if (aValue < bValue) return ascending ? -1 : 1;
-    if (aValue > bValue) return ascending ? 1 : -1;
-    return 0;
-  });
+      let valA = a[sortBy];
+      let valB = b[sortBy];
 
-  displayWatchers();
+      // Handle missing values
+      if (valA === undefined) valA = '';
+      if (valB === undefined) valB = '';
+
+      // Compare based on data types
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else {
+        return ascending ? valA - valB : valB - valA;
+      }
+    });
+  }
+
+  // Update pagination and display the sorted results
+  updatePagination();
+  displayWatchers(getPaginatedWatchers());
+}
+
+function getPaginatedWatchers() {
+  if (!Array.isArray(filteredWatchers)) {
+    return [];
+  }
+
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  return filteredWatchers.slice(startIndex, endIndex);
+}
+
+// Add a function to update pagination UI
+function updatePagination() {
+  const totalPages = Math.ceil((filteredWatchers?.length || 0) / itemsPerPage);
+
+  // Update page info
+  const currentPageEl = document.getElementById('current-page');
+  const totalPagesEl = document.getElementById('total-pages');
+
+  if (currentPageEl) currentPageEl.textContent = currentPage;
+  if (totalPagesEl) totalPagesEl.textContent = totalPages;
+
+  // Enable/disable pagination buttons
+  const prevBtn = document.getElementById('prev-page');
+  const nextBtn = document.getElementById('next-page');
+
+  if (prevBtn) prevBtn.disabled = currentPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
 }
 
 // ====== Display watchers with pagination ======
-function displayWatchers() {
-  const tableBody = document.querySelector('#watchers-table tbody');
-  if (!tableBody) return;
+function displayWatchers(watchers) {
+  const tbody = document.querySelector('#watchers-table tbody');
+  if (!tbody) return;
 
-  const totalPages = Math.ceil(filteredWatchers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const pageItems = filteredWatchers.slice(startIndex, endIndex);
+  tbody.innerHTML = '';
 
-  // Update pagination UI
-  document.getElementById('current-page').textContent = currentPage;
-  document.getElementById('total-pages').textContent = totalPages;
-  document.getElementById('prev-page').disabled = (currentPage <= 1);
-  document.getElementById('next-page').disabled = (currentPage >= totalPages);
-
-  // Clear table
-  tableBody.innerHTML = '';
-
-  // If empty
-  if (pageItems.length === 0) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="8" class="loading-message">
-          <span>No watchers found</span>
-        </td>
-      </tr>`;
+  // Add null check to prevent error
+  if (!watchers || watchers.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 7; // Update to match your actual column count
+    cell.textContent = 'No watchers found.';
+    cell.className = 'empty-table-message';
+    row.appendChild(cell);
+    tbody.appendChild(row);
     return;
   }
 
-  // Populate rows
-  pageItems.forEach((watcher) => {
-    const row = createWatcherRow(watcher);
-    tableBody.appendChild(row);
+  watchers.forEach(watcher => {
+    // Skip if watcher is null or undefined
+    if (!watcher) return;
+
+    const row = document.createElement('tr');
+    row.dataset.watcherId = watcher.id;
+    row.className = 'watcher-row'; // Add this class for identifying rows
+
+    // ID column
+    const idCell = document.createElement('td');
+    idCell.className = 'col-id';
+    idCell.textContent = watcher.id;
+    row.appendChild(idCell);
+
+    // Name column
+    const nameCell = document.createElement('td');
+    nameCell.className = 'col-name';
+    nameCell.textContent = watcher.job_name_prefix || `Watcher ${watcher.id}`;
+    row.appendChild(nameCell);
+
+    // Status column
+    const statusCell = document.createElement('td');
+    statusCell.className = 'col-status';
+    const statusBadge = document.createElement('span');
+    const status = (watcher.status || 'unknown').toLowerCase();
+    statusBadge.className = `status-badge ${status}`;
+    statusBadge.textContent = watcher.status || 'Unknown';
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+
+    // File Pattern column
+    const patternCell = document.createElement('td');
+    patternCell.className = 'col-pattern';
+    patternCell.textContent = watcher.file_pattern || '';
+    row.appendChild(patternCell);
+
+    // Progress column with new progress bar
+    const progressCell = document.createElement('td');
+    progressCell.className = 'col-progress';
+
+    // Calculate progress based on available data
+    // Try multiple property name combinations that might exist in the API response
+    let processedFiles = 0;
+    let totalFiles = 0;
+
+    // Option 1: captured_count / expected_count
+    if (watcher.captured_count !== undefined && watcher.expected_count !== undefined) {
+      processedFiles = watcher.captured_count;
+      totalFiles = watcher.expected_count;
+    }
+    // Option 2: processed_files / total_files
+    else if (watcher.processed_files !== undefined && watcher.total_files !== undefined) {
+      processedFiles = watcher.processed_files;
+      totalFiles = watcher.total_files;
+    }
+    // Option 3: captured_files (array length) / expected_files (array length)
+    else if (Array.isArray(watcher.captured_files) && Array.isArray(watcher.expected_files)) {
+      processedFiles = watcher.captured_files.length;
+      totalFiles = watcher.expected_files.length;
+    }
+    // Option 4: Use the explicit progress_percent if available
+    else if (watcher.progress_percent !== undefined) {
+      processedFiles = watcher.progress_percent;
+      totalFiles = 100;
+    }
+
+    // Fallback: Check if the watcher has a files property with captured_count
+    else if (watcher.files && watcher.files.captured_count !== undefined) {
+      processedFiles = watcher.files.captured_count;
+      totalFiles = watcher.files.expected_count || 0;
+    }
+
+    // Calculate percentage
+    const percentComplete = totalFiles > 0 ? Math.round((processedFiles / totalFiles) * 100) : 0;
+
+    // Create label with file counts
+    const progressLabel = `${processedFiles}/${totalFiles} files`;
+
+    // Log the progress calculation for debugging
+    console.log(`Watcher ${watcher.id} progress: ${progressLabel} (${percentComplete}%)`);
+
+    // Add the progress bar to the cell
+    progressCell.appendChild(createProgressBar(percentComplete, progressLabel));
+    row.appendChild(progressCell);
+
+    // Created column
+    const createdCell = document.createElement('td');
+    createdCell.className = 'col-created';
+    createdCell.textContent = watcher.creation_time ? formatDate(watcher.creation_time) : 'N/A';
+    row.appendChild(createdCell);
+
+    // Actions column
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'col-actions';
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'action-icons';
+
+    // Toggle details button
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'action-icon info toggle-details';
+    toggleButton.title = 'Show details';
+    toggleButton.innerHTML = '<i class="fas fa-info-circle"></i>';
+    toggleButton.dataset.id = watcher.id; // Add data-id attribute for event handling
+
+    // Stop watcher button (if monitoring)
+    const stopButton = document.createElement('button');
+    stopButton.className = 'action-icon terminate stop-watcher';
+    stopButton.title = 'Stop watcher';
+    stopButton.innerHTML = '<i class="fas fa-stop-circle"></i>';
+    stopButton.dataset.id = watcher.id; // Add data-id attribute for event handling
+
+    // Only show stop button if the watcher is active
+    if (status === 'monitoring') {
+      actionsDiv.appendChild(stopButton);
+    }
+
+    actionsDiv.appendChild(toggleButton);
+    actionsCell.appendChild(actionsDiv);
+    row.appendChild(actionsCell);
+
+    tbody.appendChild(row);
+  });
+
+  // Add event listeners after creating the rows
+  attachRowEventListeners();
+}
+
+function attachRowEventListeners() {
+  // Attach click handlers for toggle details buttons
+  document.querySelectorAll('.toggle-details').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent event bubbling
+      const watcherId = btn.dataset.id;
+      if (watcherId) {
+        toggleWatcherDetails(watcherId);
+      }
+    });
+  });
+
+  // Attach click handlers for stop buttons
+  document.querySelectorAll('.stop-watcher').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent event bubbling
+      const watcherId = btn.dataset.id;
+      if (watcherId) {
+        confirmStopWatcher(watcherId);
+      }
+    });
+  });
+
+  // Optional: Make entire rows clickable for expansion
+  document.querySelectorAll('.watcher-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      // Only toggle if not clicking on action buttons
+      if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details')) {
+        const watcherId = row.dataset.watcherId;
+        if (watcherId) {
+          toggleWatcherDetails(watcherId);
+        }
+      }
+    });
   });
 }
+
 
 // ====== Create a single watcher row ======
 function createWatcherRow(watcher) {
   const row = document.createElement('tr');
   row.className = 'watcher-row hover:bg-hover';
   row.dataset.id = watcher.id;
+  row.style.cursor = 'pointer'; // Indicate clickable
+
+  // Make entire row clickable for expansion
+  row.addEventListener('click', (e) => {
+    // Only toggle if not clicking on action buttons
+    if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details, .expand-watcher')) {
+      toggleWatcherDetails(watcher.id);
+    }
+  });
 
   const progressValue = calcProgressValue(watcher);
   const progressText = calcProgressText(watcher, progressValue);
@@ -204,34 +428,14 @@ function createWatcherRow(watcher) {
       </td>
       <td>${formattedDate}</td>
       <td>
-        <div class="action-icons">
-          <button class="action-icon info toggle-details" title="Show Files">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-              <path fill-rule="evenodd" 
-                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293
-                       a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4
-                       a1 1 0 010-1.414z" 
-                    clip-rule="evenodd" />
-            </svg>
-          </button>
-          ${
-            watcher.status === 'monitoring'
-              ? `<button class="action-icon terminate stop-watcher" title="Terminate Watcher">
-                  <svg xmlns="http://www.w3.org/2000/svg" 
-                       viewBox="0 0 20 20" fill="currentColor" 
-                       class="h-5 w-5">
-                    <path fill-rule="evenodd" 
-                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293
-                             a1 1 0 111.414 1.414L11.414 10l4.293 4.293
-                             a1 1 0 01-1.414 1.414L10 11.414l-4.293 
-                             4.293a1 1 0 01-1.414-1.414L8.586 10
-                             4.293 5.707a1 1 0 010-1.414z" 
-                          clip-rule="evenodd" />
-                  </svg>
-                </button>`
-              : ''
-          }
-        </div>
+       <div class="action-icons">
+              <img src="/static/images/listfiles.png" alt="Show Files" class="toggle-details" title="Show Files">
+              ${
+                watcher.status === 'monitoring'
+                  ? `<img src="/static/images/stop.png" alt="Terminate" class="stop-watcher" title="Terminate Watcher">`
+                  : ''
+              }
+      </div>
       </td>
     `;
   } else {
@@ -257,28 +461,16 @@ function createWatcherRow(watcher) {
       <td class="p-2 border">${formattedDate}</td>
       <td class="p-2 border text-center">
         <div class="flex justify-center gap-1">
-          <button class="expand-watcher" title="Show Files">
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 class="h-5 w-5" viewBox="0 0 24 24" 
-                 stroke="currentColor" fill="none">
-              <path stroke-linecap="round" stroke-linejoin="round" 
-                    stroke-width="2" 
-                    d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          <button class="action-icon info toggle-details" title="Show Files">
+          <img src="/static/images/listfiles.png" alt="Show Files" class="h-5 w-5">
+        </button>
           ${
-            watcher.status === 'monitoring'
-              ? `<button class="stop-watcher" title="Stop Watcher">
-                   <svg xmlns="http://www.w3.org/2000/svg"
-                        class="h-5 w-5" fill="none" 
-                        viewBox="0 0 24 24" stroke="currentColor">
-                     <path stroke-linecap="round" stroke-linejoin="round"
-                           stroke-width="2" 
-                           d="M6 18L18 6M6 6l12 12" />
-                   </svg>
-                 </button>`
-              : ''
-          }
+          watcher.status === 'monitoring'
+            ? `<button class="action-icon terminate stop-watcher" title="Terminate Watcher">
+                <img src="/static/images/stop.png" alt="Terminate" class="h-5 w-5">
+              </button>`
+            : ''
+        }
         </div>
       </td>
     `;
@@ -286,35 +478,51 @@ function createWatcherRow(watcher) {
 
   // Expand / collapse details
   const expandBtn = row.querySelector('.toggle-details, .expand-watcher');
-  expandBtn?.addEventListener('click', () => toggleWatcherDetails(watcher.id));
+  expandBtn?.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent row click from bubbling
+    toggleWatcherDetails(watcher.id);
+  });
 
   // Stop watcher
   const stopBtn = row.querySelector('.stop-watcher');
-  stopBtn?.addEventListener('click', () => confirmStopWatcher(watcher.id));
+  stopBtn?.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent row click from bubbling
+    confirmStopWatcher(watcher.id);
+  });
 
   return row;
 }
 
 // ====== Expand/collapse details row ======
 function toggleWatcherDetails(watcherId) {
+  console.log(`Toggling details for watcher ID: ${watcherId}`);
   const detailsRow = document.querySelector(`.watcher-details-row[data-watcher-id="${watcherId}"]`);
 
   if (detailsRow) {
     // Currently open; remove it
     detailsRow.remove();
     expandedWatchers.delete(watcherId);
-    revertExpandIcon(watcherId);
+    // Optional: revert icon
     return;
   }
 
   expandedWatchers.add(watcherId);
-  updateExpandIcon(watcherId);
+  // Optional: update icon
 
   // Insert details row
-  const watcherRow = document.querySelector(`.watcher-row[data-id="${watcherId}"]`);
-  if (!watcherRow) return;
+  const watcherRow = document.querySelector(`tr[data-watcher-id="${watcherId}"]`);
+  if (!watcherRow) {
+    console.error(`Could not find watcher row with ID: ${watcherId}`);
+    return;
+  }
 
+  // Use the template to create the details row
   const template = document.getElementById('watcher-details-template');
+  if (!template) {
+    console.error("Details template not found");
+    return;
+  }
+
   const rowClone = document.importNode(template.content, true).querySelector('.watcher-details-row');
   rowClone.dataset.watcherId = watcherId;
 
@@ -340,32 +548,52 @@ function reExpandWatchers() {
 // ====== Load watcher files ======
 function loadWatcherFiles(watcherId, detailsRow) {
   const tableBody = detailsRow.querySelector('.files-table tbody');
-  if (!tableBody) return;
+  if (!tableBody) {
+    console.error("Files table body not found in details row");
+    return;
+  }
 
   // Show a loading message
   tableBody.innerHTML = `
     <tr>
-      <td colspan="5" class="loading-message">
+      <td colspan="4" class="loading-message">
         <div class="loading-spinner"></div>
         <span>Loading files...</span>
       </td>
     </tr>`;
 
-  fetch(`/api/watchers/${watcherId}/files`)
-    .then((res) => res.json())
+  console.log(`Fetching files for watcher ID: ${watcherId}`);
+
+  // Use the enhanced fetch function
+  fetchWithLogging(`/api/watchers/${watcherId}/files`)
     .then((data) => {
       if (data.error) {
         tableBody.innerHTML = `
-          <tr><td colspan="5" class="loading-message">
+          <tr><td colspan="4" class="loading-message">
             <span class="text-red-500">Error: ${data.error}</span>
           </td></tr>`;
         return;
       }
 
-      const files = data.files || [];
+      // Handle different possible response structures
+      let files = [];
+      if (Array.isArray(data)) {
+        files = data;
+      } else if (data.files && Array.isArray(data.files)) {
+        files = data.files;
+      } else if (data.captured_files && Array.isArray(data.captured_files)) {
+        files = data.captured_files;
+      } else {
+        // Try to extract files from any property that is an array
+        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+        if (arrayProps.length > 0) {
+          files = data[arrayProps[0]];
+        }
+      }
+
       if (!files.length) {
         tableBody.innerHTML = `
-          <tr><td colspan="5" class="loading-message">
+          <tr><td colspan="4" class="loading-message">
             <span>No files captured yet</span>
           </td></tr>`;
         return;
@@ -378,51 +606,79 @@ function loadWatcherFiles(watcherId, detailsRow) {
         tableBody.appendChild(row);
       });
 
-      // Hook up sorting on file table, etc.
+      // Hook up sorting on file table
       initFileTableSort(detailsRow, files);
     })
     .catch((err) => {
       console.error('Error loading files:', err);
       tableBody.innerHTML = `
-        <tr><td colspan="5" class="loading-message">
-          <span class="text-red-500">Failed to load files</span>
+        <tr><td colspan="4" class="loading-message">
+          <span class="text-red-500">Failed to load files: ${err.message}</span>
+          <button class="action-button secondary retry-button">Retry</button>
         </td></tr>`;
+
+      // Add retry functionality
+      const retryButton = tableBody.querySelector('.retry-button');
+      if (retryButton) {
+        retryButton.addEventListener('click', () => loadWatcherFiles(watcherId, detailsRow));
+      }
     });
 }
 
+export function initializeWatcherActions() {
+  document.querySelector('#watchers-table tbody')?.addEventListener('click', (e) => {
+    const toggleDetails = e.target.closest('.toggle-details');
+    const stopWatcher = e.target.closest('.stop-watcher');
+
+    if (toggleDetails) {
+      const row = toggleDetails.closest('tr');
+      const watcherId = row.dataset.watcherId;
+      toggleWatcherDetails(watcherId, row);
+    }
+
+    if (stopWatcher) {
+      const row = stopWatcher.closest('tr');
+      const watcherId = row.dataset.watcherId;
+      stopWatcher(watcherId);
+    }
+  });
+}
 // ====== Create file row ======
 function createFileRow(file) {
+  console.log("Creating row for file:", file);
+
   const row = document.createElement('tr');
   row.className = 'hover:bg-hover';
 
-  const captureDate = file.capture_time ? formatDate(file.capture_time) : 'Pending';
-  const fileStatus = file.status || (file.capture_time ? 'captured' : 'pending');
+  // Handle different possible file object structures
+  const fileName = file.file_name || file.name || file.filename ||
+                  (typeof file === 'string' ? file : 'Unknown');
 
-  // Detect new or old UI
-  const usingNewUI = document.querySelector('.status-badge') !== null;
-  if (usingNewUI) {
-    row.innerHTML = `
-      <td title="${file.file_name}">${file.file_name}</td>
-      <td title="${file.file_path || 'N/A'}">${file.file_path || 'N/A'}</td>
-      <td>${captureDate}</td>
-      <td>${file.job_id || 'N/A'}</td>
-      <td class="text-center">
-        <span class="status-badge ${fileStatus}">${fileStatus}</span>
-      </td>
-    `;
-  } else {
-    const statusHtml =
-      fileStatus === 'pending'
-        ? `<span class="inline-block bg-yellow-100 text-yellow-800 text-xs rounded-full px-2 py-1">Pending</span>`
-        : `<span class="inline-block bg-green-100 text-green-800 text-xs rounded-full px-2 py-1">Captured</span>`;
-    row.innerHTML = `
-      <td class="p-2 border">${file.file_name}</td>
-      <td class="p-2 border">${file.file_path || 'N/A'}</td>
-      <td class="p-2 border">${captureDate}</td>
-      <td class="p-2 border">${file.job_id || 'N/A'}</td>
-      <td class="p-2 border text-center">${statusHtml}</td>
-    `;
-  }
+  const filePath = file.file_path || file.path || file.fullPath || 'N/A';
+  const jobId = file.job_id || file.jobId || 'N/A';
+  const fileStatus = file.status || file.state || 'pending';
+
+  // Create cells for the column structure
+  const nameCell = document.createElement('td');
+  nameCell.title = fileName;
+  nameCell.textContent = fileName;
+  row.appendChild(nameCell);
+
+  const pathCell = document.createElement('td');
+  pathCell.title = filePath;
+  pathCell.textContent = filePath;
+  row.appendChild(pathCell);
+
+  const jobCell = document.createElement('td');
+  jobCell.textContent = jobId;
+  row.appendChild(jobCell);
+
+  const statusCell = document.createElement('td');
+  const statusBadge = document.createElement('span');
+  statusBadge.className = `status-badge ${fileStatus}`;
+  statusBadge.textContent = fileStatus;
+  statusCell.appendChild(statusBadge);
+  row.appendChild(statusCell);
 
   return row;
 }
@@ -504,16 +760,14 @@ function stopWatcher(watcherId) {
     .then((result) => {
       if (result.success) {
         showToast?.(`Watcher #${watcherId} terminated successfully`, 'success');
-        loadWatchers();
+        loadWatchers(); // Refresh UI
       } else {
-        const msg = `Error terminating watcher: ${result.error || 'Unknown error'}`;
-        showToast?.(msg, 'error') || alert(msg);
+        showToast?.(`Error terminating watcher: ${result.error || 'Unknown error'}`, 'error');
       }
     })
     .catch((err) => {
       console.error('Error stopping watcher:', err);
-      showToast?.('Error terminating watcher. Please try again.', 'error') ||
-        alert('Error terminating watcher. Please try again.');
+      showToast?.('Error terminating watcher. Please try again.', 'error');
     });
 }
 
@@ -594,12 +848,6 @@ function calcProgressText(watcher, progressValue) {
     : 'No files yet';
 }
 
-function formatDate(dateString) {
-  if (!dateString) return 'N/A';
-  const d = new Date(dateString);
-  return d.toLocaleString();
-}
-
 function getStatusColor(status) {
   switch (status) {
     case 'monitoring': return 'bg-green-500';
@@ -623,6 +871,33 @@ function revertExpandIcon(watcherId) {
     icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />';
   }
 }
+
+
+// Add this CSS to your document when it loads
+document.addEventListener('DOMContentLoaded', () => {
+  // Add styles to make sure SVGs inside action buttons don't interfere with click events
+  const style = document.createElement('style');
+  style.textContent = `
+    .toggle-details,
+    .stop-watcher {
+      width: 1.25rem;
+      height: 1.25rem;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .data-table tbody tr:hover .action-icons img {
+      background: transparent;
+    }
+  `;
+  document.head.appendChild(style);
+
+  console.log('Action icons:', document.querySelectorAll('.action-icon').length);
+  console.log('Toggle details:', document.querySelectorAll('.toggle-details').length);
+  console.log('Watchers table:', !!document.querySelector('#watchers-table'));
+});
 
 function updateExpandIcon(watcherId) {
   const row = document.querySelector(`.watcher-row[data-id="${watcherId}"]`);
@@ -653,3 +928,4 @@ export function nextWatchersPage() {
     displayWatchers();
   }
 }
+

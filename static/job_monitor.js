@@ -17,6 +17,31 @@ import {
   sortAndDisplayJobs
 } from './jobs.js';
 
+function openModal(modal) {
+  if (!modal) return;
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden'; // Prevent background scrolling
+}
+
+function closeModal(modal) {
+  if (!modal) return;
+  modal.classList.remove('active');
+  document.body.style.overflow = ''; // Restore scrolling
+}
+
+// Make sure openModal and closeModal are available globally
+window.openModal = function(modal) {
+  if (!modal) return;
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden'; // Prevent background scrolling
+};
+
+window.closeModal = function(modal) {
+  if (!modal) return;
+  modal.classList.remove('active');
+  document.body.style.overflow = ''; // Restore scrolling
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   // ========== Watchers ==========
   loadWatchers(); // initial load
@@ -33,6 +58,29 @@ document.addEventListener('DOMContentLoaded', () => {
   if (searchInput) {
     // You can call a debounce if you want, or directly
     searchInput.addEventListener('input', () => filterAndDisplayWatchers());
+  }
+
+  const selectFolderBtn = document.getElementById('select-folder-btn');
+  const folderPathInput = document.getElementById('folder_path');
+
+  if (selectFolderBtn && folderPathInput) {
+    selectFolderBtn.addEventListener('click', async () => {
+      try {
+        // Call the webview API to open directory selection
+        const selectedDir = await window.pywebview.api.select_directory();
+        if (selectedDir) {
+          folderPathInput.value = selectedDir;
+          console.log(`Selected folder: ${selectedDir}`);
+        } else {
+          console.log('Directory selection canceled');
+        }
+      } catch (error) {
+        console.error('Error selecting directory:', error);
+        showToast?.('Failed to open directory selector', 'error');
+      }
+    });
+  } else {
+    console.error('Browse button or folder input not found');
   }
 
   // Set up sorting on watchers table header
@@ -59,13 +107,100 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create watcher modal
   const createWatcherBtn = document.getElementById('create-watcher-btn');
   const createWatcherModal = document.getElementById('create-watcher-modal');
-  createWatcherBtn?.addEventListener('click', () => openModal?.(createWatcherModal));
+
+   if (createWatcherBtn && createWatcherModal) {
+    createWatcherBtn.addEventListener('click', () => {
+      console.log('Opening modal'); // Debug
+      openModal(createWatcherModal);
+    });
+  } else {
+    console.error('Create watcher button or modal not found:',
+                 { btn: !!createWatcherBtn, modal: !!createWatcherModal });
+  }
 
   const closeModalBtn = document.getElementById('close-modal');
-  closeModalBtn?.addEventListener('click', () => closeModal?.(createWatcherModal));
+  if (closeModalBtn && createWatcherModal) {
+    closeModalBtn.addEventListener('click', () => {
+      closeModal(createWatcherModal);
+    });
+  }
 
   const cancelWatcherBtn = document.getElementById('cancel-watcher');
-  cancelWatcherBtn?.addEventListener('click', () => closeModal?.(createWatcherModal));
+  if (cancelWatcherBtn && createWatcherModal) {
+    cancelWatcherBtn.addEventListener('click', () => {
+      closeModal(createWatcherModal);
+    });
+  }
+
+  window.showToast = function(message, type = 'success', duration = 3000) {
+    const toast = document.getElementById('toast-notification');
+    if (!toast) return;
+
+    const toastContent = toast.querySelector('.toast-content');
+    const toastMessage = toast.querySelector('.toast-message');
+
+    // Reset classes
+    toastContent.className = 'toast-content';
+    if (type) {
+      toastContent.classList.add(type);
+    }
+
+    toastMessage.textContent = message;
+
+    // Show the toast
+    toast.classList.add('active');
+
+    // Set up auto-dismiss
+    const timeout = setTimeout(() => {
+      toast.classList.remove('active');
+    }, duration);
+
+    // Handle manual close
+    const closeBtn = toast.querySelector('.toast-close');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        clearTimeout(timeout);
+        toast.classList.remove('active');
+      };
+    }
+  };
+
+  // Confirmation modal function
+  window.showConfirmationModal = function(message, confirmCallback) {
+    const modal = document.getElementById('confirm-modal');
+    if (!modal) return;
+
+    const messageEl = document.getElementById('confirm-message');
+    if (messageEl) messageEl.textContent = message;
+
+    const confirmBtn = document.getElementById('confirm-action');
+    if (confirmBtn) {
+      // Store original handler
+      const originalHandler = confirmBtn.onclick;
+
+      // Set new handler
+      confirmBtn.onclick = () => {
+        closeModal(modal);
+        confirmCallback();
+
+        // Reset to original handler
+        confirmBtn.onclick = originalHandler;
+      };
+    }
+
+    // Set up cancel buttons
+    document.querySelectorAll('.confirm-cancel').forEach(btn => {
+      btn.onclick = () => {
+        closeModal(modal);
+      };
+    });
+
+    openModal(modal);
+  };
+
+
+
+
 
   // Hook up the watcher form submission
   const watcherForm = document.getElementById('watcher-form');
@@ -95,3 +230,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 10000);
 });
+
+console.log('Job Monitor JS loaded');
+
+// Log API request errors
+window.fetchWithLogging = function(url, options = {}) {
+  console.log(`Fetching: ${url}`, options);
+
+  return fetch(url, options)
+    .then(response => {
+      console.log(`Response from ${url}:`, response.status);
+      return response.json();
+    })
+    .then(data => {
+      console.log(`Data from ${url}:`, data);
+      return data;
+    })
+    .catch(error => {
+      console.error(`Error fetching ${url}:`, error);
+      throw error;
+    });
+};

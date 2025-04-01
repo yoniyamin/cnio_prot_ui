@@ -3,7 +3,8 @@ import sqlite3
 from pathlib import Path
 import os
 from datetime import datetime
-
+import logging
+logger = logging.getLogger('proteomics_ui')
 
 class WatcherDB:
     def __init__(self, db_path="config/watchers.db"):
@@ -18,7 +19,9 @@ class WatcherDB:
         # Initial connection just for table creation
         with sqlite3.connect(str(self.db_path)) as conn:
             self._create_tables(conn)
-        print(f"Database initialized at: {self.db_path}")
+
+        logger.debug(f"Database initialized at: {self.db_path}")
+
 
     def _create_tables(self, conn):
         """Create the watchers and captured_files tables."""
@@ -125,7 +128,7 @@ class WatcherDB:
         """Update the status and completion_time of a watcher."""
         with sqlite3.connect(str(self.db_path)) as conn:
             try:
-                if status == "completed":
+                if status in ["completed", "cancelled"]:  # Add 'cancelled' here
                     conn.execute("""
                         UPDATE watchers SET status = ?, completion_time = CURRENT_TIMESTAMP WHERE id = ?
                     """, (status, watcher_id))
@@ -134,10 +137,11 @@ class WatcherDB:
                         UPDATE watchers SET status = ? WHERE id = ?
                     """, (status, watcher_id))
                 conn.commit()
-                print(
-                    f"Updated watcher {watcher_id} status to '{status}'{' with completion time' if status == 'completed' else ''}.")
+                logger.info(
+                    f"Updated watcher {watcher_id} status to '{status}'{' with completion time' if status in ['completed', 'cancelled'] else ''}."
+                )
             except sqlite3.Error as e:
-                print(f"Failed to update watcher status: {e}")
+                logger.error(f"Failed to update watcher status: {e}")
                 raise
 
     def update_execution_time(self, watcher_id, execution_time):

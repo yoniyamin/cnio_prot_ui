@@ -4,16 +4,17 @@
  * displaying them, sorting them, etc.
  ************************************/
 
+import { createProgressBar, formatDate } from './utils.js';
+
 let jobsData = [];
 let currentJobSort = { column: 'id', ascending: false };
 
 // ====== Fetch jobs from server ======
-export function loadJobs(showLoading = true) {
-  const tableBody = document.querySelector('#jobs-table tbody');
-  if (!tableBody) return;
+function loadJobs(showLoading = true) {
+  const tbody = document.querySelector('#jobs-table tbody');
 
-  if (showLoading) {
-    tableBody.innerHTML = `
+  if (showLoading && tbody) {
+    tbody.innerHTML = `
       <tr>
         <td colspan="7" class="loading-message">
           <div class="loading-spinner"></div>
@@ -23,142 +24,188 @@ export function loadJobs(showLoading = true) {
     `;
   }
 
-  fetch('/api/jobs')
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.error) {
-        tableBody.innerHTML = `
-          <tr>
-            <td colspan="7" class="loading-message text-red-500">
-              Error: ${data.error}
-            </td>
-          </tr>`;
-        return;
+  return fetch('/api/jobs')
+    .then(response => response.json())
+    .then(data => {
+      // Add a safe check for data
+      if (!data || !Array.isArray(data.jobs)) {
+        console.warn('Invalid jobs data structure:', data);
+        // Initialize with an empty array if data is invalid
+        return sortAndDisplayJobs('id', false, []);
       }
-
-      jobsData = data.jobs || [];
-      sortAndDisplayJobs();
+      return sortAndDisplayJobs('id', false, data.jobs);
     })
-    .catch((error) => {
+    .catch(error => {
       console.error('Error loading jobs:', error);
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="7" class="loading-message text-red-500">
-            Failed to load jobs
-          </td>
-        </tr>`;
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="error-message">
+              Failed to load jobs. Please try again.
+            </td>
+          </tr>
+        `;
+      }
+      // Return empty array to prevent further errors
+      return [];
     });
 }
 
 // ====== Sort jobs (table header clicks, etc.) ======
-export function sortAndDisplayJobs(sortBy = null) {
-  if (sortBy) {
-    if (sortBy === currentJobSort.column) {
-      // Toggle direction
-      currentJobSort.ascending = !currentJobSort.ascending;
-    } else {
-      currentJobSort.column = sortBy;
-      currentJobSort.ascending = true;
-    }
+function sortAndDisplayJobs(sortBy = 'id', ascending = false, jobsData = null) {
+  // If jobsData is provided, use it; otherwise, use the module-level jobs variable
+  // Make sure to handle the case where neither is available
+  const jobs = jobsData || window.jobsData || [];
+
+  // Store the sorted jobs back to the module-level variable or window
+  window.jobsData = sortJobs(jobs, sortBy, ascending);
+
+  // Display the sorted jobs
+  displayJobs(window.jobsData);
+
+  // Return the sorted jobs for chaining
+  return window.jobsData;
+}
+
+// Function to sort jobs
+function sortJobs(jobs, sortBy, ascending) {
+  // Add null check to prevent error
+  if (!jobs || !Array.isArray(jobs)) {
+    console.warn('Invalid jobs data:', jobs);
+    return [];
   }
 
-  // Actually sort
-  jobsData.sort((a, b) => {
-    let aValue, bValue;
-    switch (currentJobSort.column) {
-      case 'id':
-        aValue = a.id;
-        bValue = b.id;
-        break;
-      case 'name':
-        aValue = a.name;
-        bValue = b.name;
-        break;
-      case 'status':
-        aValue = a.status;
-        bValue = b.status;
-        break;
-      case 'type':
-        aValue = a.job_type || '';
-        bValue = b.job_type || '';
-        break;
-      case 'progress':
-        aValue = a.progress || 0;
-        bValue = b.progress || 0;
-        break;
-      case 'creation_time':
-        aValue = new Date(a.creation_time);
-        bValue = new Date(b.creation_time);
-        break;
-      default:
-        aValue = a.id;
-        bValue = b.id;
+  return [...jobs].sort((a, b) => {
+    // Add null checks to handle missing properties
+    if (!a || !b) return 0;
+
+    let valA = a[sortBy];
+    let valB = b[sortBy];
+
+    // Handle missing values
+    if (valA === undefined) valA = '';
+    if (valB === undefined) valB = '';
+
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      return ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else {
+      return ascending ? valA - valB : valB - valA;
     }
-
-    if (aValue < bValue) return currentJobSort.ascending ? -1 : 1;
-    if (aValue > bValue) return currentJobSort.ascending ? 1 : -1;
-    return 0;
   });
-
-  displayJobs();
 }
 
 // ====== Render the jobs table ======
-function displayJobs() {
-  const tableBody = document.querySelector('#jobs-table tbody');
-  if (!tableBody) return;
+function displayJobs(jobs) {
+  const tbody = document.querySelector('#jobs-table tbody');
+  if (!tbody) return;
 
-  if (!jobsData.length) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="7" class="loading-message">
-          <span>No jobs found</span>
-        </td>
-      </tr>`;
+  tbody.innerHTML = '';
+
+  // Add null check to prevent error
+  if (!jobs || jobs.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 7; // Update to match your actual column count
+    cell.textContent = 'No jobs found.';
+    cell.className = 'empty-table-message';
+    row.appendChild(cell);
+    tbody.appendChild(row);
     return;
   }
 
-  tableBody.innerHTML = '';
-  jobsData.forEach((job) => {
-    const row = createJobRow(job);
-    tableBody.appendChild(row);
+  jobs.forEach(job => {
+    // Skip if job is null or undefined
+    if (!job) return;
+
+    const row = document.createElement('tr');
+    row.dataset.jobId = job.id;
+
+    // ID column
+    const idCell = document.createElement('td');
+    idCell.className = 'col-id';
+    idCell.textContent = job.id;
+    row.appendChild(idCell);
+
+    // Name column
+    const nameCell = document.createElement('td');
+    nameCell.className = 'col-name';
+    nameCell.textContent = job.name || `Job ${job.id}`;
+    row.appendChild(nameCell);
+
+    // Status column
+    const statusCell = document.createElement('td');
+    statusCell.className = 'col-status';
+    const statusBadge = document.createElement('span');
+    const status = (job.status || 'unknown').toLowerCase();
+    statusBadge.className = `status-badge ${status}`;
+    statusBadge.textContent = job.status || 'Unknown';
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+
+    // Type column
+    const typeCell = document.createElement('td');
+    typeCell.className = 'col-type';
+    typeCell.textContent = job.type || 'Unknown';
+    row.appendChild(typeCell);
+
+    // Progress column with new progress bar
+    const progressCell = document.createElement('td');
+    progressCell.className = 'col-progress';
+
+    // Get progress info for the progress bar
+    const percentComplete = job.progress_percent || 0;
+    const stepsComplete = job.steps_completed || 0;
+    const totalSteps = job.total_steps || 0;
+
+    // Create label with step counts if available
+    let progressLabel;
+    if (totalSteps > 0) {
+      progressLabel = `${stepsComplete}/${totalSteps} steps`;
+    } else {
+      progressLabel = `${percentComplete}%`;
+    }
+
+    // Add the progress bar to the cell
+    progressCell.appendChild(createProgressBar(percentComplete, progressLabel));
+    row.appendChild(progressCell);
+
+    // Created column
+    const createdCell = document.createElement('td');
+    createdCell.className = 'col-created';
+    createdCell.textContent = job.creation_time ? formatDate(job.creation_time) : 'N/A';
+    row.appendChild(createdCell);
+
+    // Actions column
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'col-actions';
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'action-icons';
+
+    // Details button
+    const detailsButton = document.createElement('button');
+    detailsButton.className = 'action-icon info';
+    detailsButton.title = 'View job details';
+    detailsButton.innerHTML = '<i class="fas fa-info-circle"></i>';
+    detailsButton.addEventListener('click', () => viewJobDetails(job.id));
+
+    // Cancel job button (if running)
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'action-icon terminate';
+    cancelButton.title = 'Cancel job';
+    cancelButton.innerHTML = '<i class="fas fa-stop-circle"></i>';
+    cancelButton.addEventListener('click', () => cancelJob(job.id));
+
+    // Only show cancel button if the job is active
+    if (['running', 'pending', 'queued'].includes(status)) {
+      actionsDiv.appendChild(cancelButton);
+    }
+
+    actionsDiv.appendChild(detailsButton);
+    actionsCell.appendChild(actionsDiv);
+    row.appendChild(actionsCell);
+
+    tbody.appendChild(row);
   });
-}
-
-// ====== Create a single job row ======
-function createJobRow(job) {
-  const row = document.createElement('tr');
-  row.className = 'hover:bg-hover';
-
-  const creationDate = job.creation_time ? new Date(job.creation_time).toLocaleString() : 'N/A';
-  const jobProgress = job.progress ? `${Math.round(job.progress)}%` : '0%';
-
-  // If you have new UI or old UI differences, handle them here
-  row.innerHTML = `
-    <td>${job.id}</td>
-    <td>${job.name}</td>
-    <td><span class="status-badge ${job.status}">${job.status}</span></td>
-    <td>${job.job_type}</td>
-    <td>${jobProgress}</td>
-    <td>${creationDate}</td>
-    <td>
-      <!-- Example action icons or buttons -->
-      <button class="action-icon terminate" title="Stop Job" data-jobid="${job.id}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5"
-             viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" 
-                d="M6 18L18 6M6 6l12 12" 
-                clip-rule="evenodd" />
-        </svg>
-      </button>
-    </td>
-  `;
-
-  // Example: hooking up stop action
-  const stopBtn = row.querySelector('.terminate');
-  stopBtn.addEventListener('click', () => stopJob(job.id));
-
-  return row;
 }
 
 // ====== Stop job logic ======
@@ -180,4 +227,11 @@ function stopJob(jobId) {
       console.error('Error stopping job:', error);
       showToast?.('Failed to stop job', 'error');
     });
+}
+
+
+export {
+  displayJobs,
+  sortAndDisplayJobs,
+  loadJobs,
 }
