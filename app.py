@@ -537,69 +537,85 @@ def maxquant():
         mq_path = request.form.get('mq_path')
         mq_version = request.form.get('mq_version')
         dbs = request.form.getlist('database_choices')
-        job_name = request.form.get('job_name') or "MaxQuantJob"
+        job_name = request.form.get('job_name') or f"MaxQuantJob_{int(time.time())}"
 
         logger.info(f"MaxQuant job submitted: {job_name}")
-        logger.debug(
-            f"MaxQuant parameters: fasta={fasta_folder}, output={output_folder}, conditions={conditions_file}, mq_path={mq_path}, version={mq_version}, dbs={dbs}")
+        logger.debug(f"Parameters: fasta={fasta_folder}, output={output_folder}, conditions={conditions_file}, mq_path={mq_path}, version={mq_version}, dbs={dbs}")
 
-        # Validate key inputs
+        # Validate inputs
         if not all([fasta_folder, output_folder, conditions_file, mq_path, dbs]):
             logger.warning(f"MaxQuant job {job_name} missing required fields")
             return "Error: Missing required fields", 400
 
-        # Validate that files/folders exist
         if not os.path.isdir(fasta_folder):
-            logger.warning(f"MaxQuant job {job_name} FASTA folder does not exist: {fasta_folder}")
+            logger.warning(f"FASTA folder does not exist: {fasta_folder}")
             return f"Error: FASTA folder does not exist: {fasta_folder}", 400
 
         if not os.path.isdir(output_folder):
-            try:
-                os.makedirs(output_folder, exist_ok=True)
-                logger.info(f"Created output directory for MaxQuant job {job_name}: {output_folder}")
-            except Exception as e:
-                logger.error(f"Error creating output folder for MaxQuant job {job_name}: {str(e)}", exc_info=True)
-                return f"Error: Could not create output folder: {str(e)}", 400
+            os.makedirs(output_folder, exist_ok=True)
+            logger.info(f"Created output directory: {output_folder}")
 
         if not os.path.isfile(conditions_file):
-            logger.warning(f"MaxQuant job {job_name} conditions file does not exist: {conditions_file}")
+            logger.warning(f"Conditions file does not exist: {conditions_file}")
             return f"Error: Conditions file does not exist: {conditions_file}", 400
 
         if not os.path.isfile(mq_path):
-            logger.warning(f"MaxQuant job {job_name} executable does not exist: {mq_path}")
+            logger.warning(f"MaxQuant executable does not exist: {mq_path}")
             return f"Error: MaxQuant executable does not exist: {mq_path}", 400
 
-        # Create local output directory for job tracking
-        local_output = os.path.join(app.config['UPLOAD_FOLDER'], job_name)
-        os.makedirs(local_output, exist_ok=True)
-        logger.info(f"Created job tracking directory for MaxQuant job {job_name}: {local_output}")
+        # Parse conditions file to get raw file list
+        ext = os.path.splitext(conditions_file)[1]
+        if ext == ".xlsx":
+            conditions_df = pd.read_excel(conditions_file, sheet_name="Sheet1", dtype=str)
+        elif ext in [".txt", ".tsv"]:
+            conditions_df = pd.read_csv(conditions_file, sep="\t", dtype=str)
+        else:
+            logger.error(f"Unsupported conditions file format: {ext}")
+            return "Error: Conditions file must be .xlsx, .txt, or .tsv", 400
 
-        # Log job info
-        with open(os.path.join(local_output, "job_info.txt"), "w") as f:
-            f.write(f"Job Name: {job_name}\n")
-            f.write(f"FASTA Folder: {fasta_folder}\n")
-            f.write(f"Output Folder: {output_folder}\n")
-            f.write(f"Conditions File: {conditions_file}\n")
-            f.write(f"MaxQuant Path: {mq_path}\n")
-            f.write(f"MaxQuant Version: {mq_version}\n")
-            f.write(f"Selected Databases: {', '.join(dbs)}\n")
+        raw_files = conditions_df['Raw file path'].apply(lambda x: os.path.basename(str(Path(x)))).tolist()
+        file_pattern = ";".join(raw_files)  # Exact file names as pattern
+        watch_folder = os.path.dirname(conditions_file)  # Default to conditions file folder; adjust if raw files are elsewhere
 
-        # Start MaxQuant job in a separate thread
-        thread = threading.Thread(target=launch_maxquant_job,
-                                  args=(mq_version, mq_path, conditions_file, dbs, output_folder, job_name))
-        thread.daemon = True
+        # Create watcher
+        watcher_data = {
+            'folder_path': watch_folder,
+            'file_pattern': file_pattern,
+            'job_type': 'maxquant',
+            'job_demands': json.dumps({
+                'fasta_folder': fasta_folder,
+                'output_folder': output_folder,
+                'conditions_file': conditions_file,
+                'mq_path': mq_path,
+                'mq_version': mq_version,
+                'dbs': dbs,
+                'job_name': job_name,
+                'db_map': "path/to/your/db_map.xlsx"  # Add actual path or fetch from config
+            }),
+            'job_name_prefix': job_name
+        }
+
+        watcher_id = watcher_db.add_watcher(**watcher_data)
+        logger.info(f"Created watcher {watcher_id} for job {job_name}")
+
+        # Start watcher
+        job_queue_manager = JobQueueManager(db_path=db_path)
+        watcher_manager = WatcherManager(watcher_db, job_queue_manager)
+        watcher = watcher_manager.create_single_watcher(watcher_id)
+        thread = threading.Thread(target=watcher.start, daemon=True)
         thread.start()
-        logger.info(f"Started MaxQuant job {job_name} in thread")
+        logger.info(f"Started watcher {watcher_id} in thread")
 
         return f"""
-        <h3>Job Submitted Successfully</h3>
-        <p>Your MaxQuant job '{job_name}' has been submitted.</p>
-        <p>You can track its progress in the <a href='/job-monitor'>Job Monitor</a>.</p>
+        <h3>Watcher Created</h3>
+        <p>A watcher (ID: {watcher_id}) has been set up for '{job_name}'.</p>
+        <p>The MaxQuant job will start once all files in the conditions file are captured.</p>
+        <p>Track progress in the <a href='/job-monitor'>Job Monitor</a>.</p>
         """
 
     except Exception as e:
-        logger.error(f"Error submitting MaxQuant job: {str(e)}", exc_info=True)
-        return f"Error submitting MaxQuant job: {str(e)}", 500
+        logger.error(f"Error setting up MaxQuant watcher: {str(e)}", exc_info=True)
+        return f"Error setting up MaxQuant watcher: {str(e)}", 500
 
 
 def launch_maxquant_job(mq_version, mq_path, conditions_file, dbs, output_folder, job_name):

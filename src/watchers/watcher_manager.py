@@ -1,9 +1,10 @@
 # src/watchers/watcher_manager.py
 import threading
 import time
-
+import queue
 from app import logger
 from src.watchers.file_watcher import FileWatcher
+from src.handlers.run_maxquant import MaxQuant_handler
 
 class WatcherManager:
     def __init__(self, db, job_queue_manager):

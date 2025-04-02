@@ -14,7 +14,14 @@ let expandedWatchers = new Set();
 
 let currentWatcherSort = { column: 'id', ascending: false };
 let currentPage = 1;
-const itemsPerPage = 10;
+let itemsPerPage = 8;
+
+export function setWatchersPageSize(size) {
+  itemsPerPage = parseInt(size, 10) || 8;
+  currentPage = 1; // Reset to first page when changing page size
+  updatePagination();
+  displayWatchers(getPaginatedWatchers());
+}
 
 // ====== Fetch watchers from server ======
 export function loadWatchers(showLoading = true) {
@@ -191,9 +198,11 @@ function updatePagination() {
   // Update page info
   const currentPageEl = document.getElementById('current-page');
   const totalPagesEl = document.getElementById('total-pages');
+  const pageSizeEl = document.getElementById('watcher-page-size');
 
   if (currentPageEl) currentPageEl.textContent = currentPage;
   if (totalPagesEl) totalPagesEl.textContent = totalPages;
+  if (pageSizeEl) pageSizeEl.value = itemsPerPage.toString();
 
   // Enable/disable pagination buttons
   const prevBtn = document.getElementById('prev-page');
@@ -656,7 +665,10 @@ function createFileRow(file) {
 
   const filePath = file.file_path || file.path || file.fullPath || 'N/A';
   const jobId = file.job_id || file.jobId || 'N/A';
-  const fileStatus = file.status || file.state || 'pending';
+
+  // MODIFIED: Default to "captured" status instead of "pending" if no status is found
+  // This assumes that any file shown in the list has been captured
+  const fileStatus = file.status || file.state || 'captured';
 
   // Create cells for the column structure
   const nameCell = document.createElement('td');

@@ -8,6 +8,26 @@ import { createProgressBar, formatDate } from './utils.js';
 
 let jobsData = [];
 let currentJobSort = { column: 'id', ascending: false };
+let currentJobsPage = 1;
+let jobsPerPage = 8; // Default to 8 items per page
+
+// Add a function to change page size
+export function setJobsPageSize(size) {
+  jobsPerPage = parseInt(size, 10) || 8;
+  currentJobsPage = 1; // Reset to first page when changing page size
+  updateJobsPagination();
+  displayJobs(getPaginatedJobs());
+}
+
+function getPaginatedJobs() {
+  if (!jobsData || !Array.isArray(jobsData)) {
+    return [];
+  }
+
+  const startIndex = (currentJobsPage - 1) * jobsPerPage;
+  const endIndex = startIndex + jobsPerPage;
+  return jobsData.slice(startIndex, endIndex);
+}
 
 // ====== Fetch jobs from server ======
 function loadJobs(showLoading = true) {
@@ -56,10 +76,14 @@ function sortAndDisplayJobs(sortBy = 'id', ascending = false, jobsData = null) {
   // If jobsData is provided, use it; otherwise, use the module-level jobs variable
   // Make sure to handle the case where neither is available
   const jobs = jobsData || window.jobsData || [];
+  // Store the sort info
+  currentJobSort.column = sortBy;
+  currentJobSort.ascending = ascending;
 
   // Store the sorted jobs back to the module-level variable or window
   window.jobsData = sortJobs(jobs, sortBy, ascending);
-
+  // Reset to first page when sorting
+  currentJobsPage = 1;
   // Display the sorted jobs
   displayJobs(window.jobsData);
 
@@ -206,6 +230,43 @@ function displayJobs(jobs) {
 
     tbody.appendChild(row);
   });
+  updateJobsPagination();
+}
+
+function updateJobsPagination() {
+  const totalPages = Math.ceil((jobsData?.length || 0) / jobsPerPage);
+
+  // Update page info
+  const currentPageEl = document.getElementById('jobs-current-page');
+  const totalPagesEl = document.getElementById('jobs-total-pages');
+  const pageSizeEl = document.getElementById('jobs-page-size');
+
+  if (currentPageEl) currentPageEl.textContent = currentJobsPage;
+  if (totalPagesEl) totalPagesEl.textContent = totalPages;
+  if (pageSizeEl) pageSizeEl.value = jobsPerPage.toString();
+
+  // Enable/disable pagination buttons
+  const prevBtn = document.getElementById('jobs-prev-page');
+  const nextBtn = document.getElementById('jobs-next-page');
+
+  if (prevBtn) prevBtn.disabled = currentJobsPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentJobsPage >= totalPages;
+}
+
+// Add pagination helper functions
+function prevJobsPage() {
+  if (currentJobsPage > 1) {
+    currentJobsPage--;
+    displayJobs(getPaginatedJobs());
+  }
+}
+
+function nextJobsPage() {
+  const totalPages = Math.ceil((jobsData?.length || 0) / jobsPerPage);
+  if (currentJobsPage < totalPages) {
+    currentJobsPage++;
+    displayJobs(getPaginatedJobs());
+  }
 }
 
 // ====== Stop job logic ======
@@ -234,4 +295,6 @@ export {
   displayJobs,
   sortAndDisplayJobs,
   loadJobs,
+  prevJobsPage,
+  nextJobsPage
 }

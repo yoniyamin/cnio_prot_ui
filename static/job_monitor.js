@@ -9,12 +9,16 @@ import {
   filterAndDisplayWatchers,
   createWatcher,
   prevWatchersPage,
-  nextWatchersPage
+  nextWatchersPage,
+  setWatchersPageSize
 } from './watchers.js';
 
 import {
   loadJobs,
-  sortAndDisplayJobs
+  sortAndDisplayJobs,
+  prevJobsPage,
+  nextJobsPage,
+  setJobsPageSize
 } from './jobs.js';
 
 function openModal(modal) {
@@ -52,7 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Set up status filter
   const statusFilter = document.getElementById('status-filter');
   statusFilter?.addEventListener('change', () => loadWatchers());
+  // Pagination watchers
+  document.getElementById('prev-page')?.addEventListener('click', () => prevWatchersPage());
+  document.getElementById('next-page')?.addEventListener('click', () => nextWatchersPage());
 
+  document.getElementById('watcher-page-size')?.addEventListener('change', (e) => {
+    setWatchersPageSize(e.target.value);
+  });
   // Set up search
   const searchInput = document.getElementById('watcher-search');
   if (searchInput) {
@@ -208,6 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ========== Jobs ==========
   loadJobs(); // initial load
+  document.getElementById('jobs-prev-page')?.addEventListener('click', () => prevJobsPage());
+  document.getElementById('jobs-next-page')?.addEventListener('click', () => nextJobsPage());
+  document.getElementById('jobs-page-size')?.addEventListener('change', (e) => {
+    setJobsPageSize(e.target.value);
+  });
   // Sort job table on header click
   document.querySelectorAll('#jobs-table th[data-sort]').forEach(th => {
     th.addEventListener('click', () => {
