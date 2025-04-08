@@ -3,8 +3,7 @@ import sqlite3
 from pathlib import Path
 import os
 from datetime import datetime
-import logging
-logger = logging.getLogger('proteomics_ui')
+from src.utils import logger
 
 class WatcherDB:
     def __init__(self, db_path="config/watchers.db"):
@@ -155,6 +154,7 @@ class WatcherDB:
             except sqlite3.Error as e:
                 print(f"Failed to update execution time: {e}")
                 raise
+
 
     def close(self):
         """No persistent connection to close."""

@@ -2,6 +2,9 @@ import uuid
 from threading import Lock
 from datetime import datetime
 
+from src.database.jobs_db import JobsDB
+jobs_db = JobsDB()
+
 class Job:
     def __init__(self, job_submitter, job_demands, job_type, command, expected_files,
                  local_folder, job_name, job_colour=None, num_steps=None, args=None, kwargs=None):

@@ -278,7 +278,11 @@ th[data-sort].sort-desc::after {
 }
 
 
-
+.section-stats {
+  font-size: 0.9rem;
+  color: var(--secondary-text-clr);
+  margin: 0;
+}
 
 /* ======= Status Badges ======= */
 .status-badge {
@@ -327,6 +331,16 @@ th[data-sort].sort-desc::after {
 .status-badge.cancelled::before {
   background-color: rgb(220, 38, 38);
 }
+
+.status-badge.errored {
+  background-color: rgba(220, 38, 38, 0.1);
+  color: rgb(220, 38, 38);
+}
+
+.status-badge.errored::before {
+  background-color: rgb(220, 38, 38);
+}
+
 
 .status-badge.paused {
   background-color: rgba(234, 179, 8, 0.1);
@@ -858,6 +872,150 @@ th[data-sort].sort-desc::after {
   background-color: rgb(56, 178, 172);
 }
 
+/* Add this to the status badge section in job_monitor.css */
+.status-badge.waiting {
+  background-color: rgba(234, 179, 8, 0.1);
+  color: rgb(234, 179, 8);
+}
+
+.status-badge.waiting::before {
+  background-color: rgb(234, 179, 8);
+}
+
+/* Simple grid for flash cards */
+.flashcard-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;     /* space between cards */
+  margin-top: 1rem;
+}
+
+/* Enhanced flashcard styling for Grafana-like panels */
+.flashcard.job-card {
+  position: relative;
+  width: 300px; /* Slightly wider than before */
+  min-height: 180px; /* Ensure enough space for content */
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line-clr);
+  background-color: var(--tile-bg-clr);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flashcard.job-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+.card-header .job-type {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--secondary-text-clr);
+  background-color: rgba(0, 0, 0, 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Card Body */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card-body p {
+  margin: 0;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-body strong {
+  font-weight: 500;
+  color: var(--text-clr);
+}
+
+.card-body .captured-files {
+  font-size: 0.85rem;
+  color: var(--secondary-text-clr);
+}
+
+/* Job Type Colors */
+.flashcard.job-card.job-type-maxquant {
+  border-left: 4px solid #4CAF50 !important; /* Green for MaxQuant */
+  background-color: rgba(76, 175, 80, 0.05) !important;
+}
+
+.flashcard.job-card.job-type-diann {
+  border-left: 4px solid #2196F3 !important; /* Blue for DIA-NN */
+  background-color: rgba(33, 150, 243, 0.05) !important;
+}
+
+.flashcard.job-card.job-type-spectronaut {
+  border-left: 4px solid #FF9800 !important; /* Orange for Spectronaut */
+  background-color: rgba(255, 152, 0, 0.05) !important;
+}
+
+.flashcard.job-card.job-type-quantms {
+  border-left: 4px solid #9C27B0 !important; /* Purple for QuantMS */
+  background-color: rgba(156, 39, 176, 0.05) !important;
+}
+
+.flashcard.job-card.job-type-gelbandido {
+  border-left: 4px solid #F44336 !important; /* Red for GelBandido */
+  background-color: rgba(244, 67, 54, 0.05) !important;
+}
+
+.flashcard.job-card.job-type-dianalyzer {
+  border-left: 4px solid #00BCD4 !important; /* Cyan for DIAnalyzer */
+  background-color: rgba(0, 188, 212, 0.05) !important;
+}
+
+/* Fallback for unknown job types */
+.flashcard.job-card[class*="job-type-"] {
+  border-left: 4px solid #888888; /* Gray for unknown job types */
+  background-color: rgba(136, 136, 136, 0.05);
+}
+
+@keyframes highlightFade {
+  0% {
+    background-color: #d26c00;
+    border: 2px solid #ffd115;
+  }
+  80% {
+    background-color: #d26c00;
+    border: 2px solid #ffd115;
+  }
+  100% {
+    background-color: transparent;
+    border-color: transparent;
+  }
+}
+
+.job-row.highlighted {
+  animation: highlightFade 5s ease-in forwards;
+}
+
 
 /* ======= Helper classes ======= */
 [title] {
@@ -1005,4 +1163,23 @@ th[data-sort].sort-desc::after {
   .toast-message {
     font-size: 0.8rem;
   }
+
+  .flashcard.job-card {
+    width: 100%;
+    min-height: 160px;
+  }
+
+  .card-header h4 {
+    font-size: 1.1rem;
+    max-width: 60%;
+  }
+
+  .card-header .job-type {
+    font-size: 0.75rem;
+  }
+
+  .card-body p {
+    font-size: 0.85rem;
+  }
 }
+

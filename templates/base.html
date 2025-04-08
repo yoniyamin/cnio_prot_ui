@@ -8,7 +8,8 @@
 
   <!-- Use Flask's url_for to reference static files -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -83,12 +84,35 @@
       </li>
 
       <!-- Job Monitor -->
-      <li>
-        <a href="{{ url_for('job_monitor') }}">
-          <img src="{{ url_for('static', filename='icons/checklist_24dp_E8EAED_FILL0_wght400_GRAD0_opsz24.svg') }}" alt="Profile icon" class="icon" />
-          <span>Job Monitor</span>
-        </a>
-      </li>
+        <li>
+          <!-- A button that toggles the sub-menu -->
+          <button onclick="toggleSubMenu(this)" class="dropdown-btn">
+            <!-- Use the same icon you had before -->
+            <img src="{{ url_for('static', filename='icons/checklist_24dp_E8EAED_FILL0_wght400_GRAD0_opsz24.svg') }}"
+                 alt="Job Monitor icon" class="icon" />
+            <span>Job Monitor</span>
+            <!-- Arrow icon, same style as your existing submenus -->
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 height="24px" width="24px" fill="#e8eaed"
+                 viewBox="0 -960 960 960">
+              <path d="M480-361q-8 0-15-2.5t-13-8.5L268-556
+                       q-11-11-11-28t11-28q11-11 28-11t28 11l156 156
+                       156-156q11-11 28-11t28 11q11 11 11 28t-11 28L508-372
+                       q-6 6-13 8.5t-15 2.5Z"/>
+            </svg>
+          </button>
+          <!-- The sub-menu itself -->
+          <ul class="sub-menu">
+            <div>
+              <!-- Link to your Dashboard route -->
+              <li><a href="{{ url_for('job_monitor_dashboard') }}">Dashboard</a></li>
+              <!-- Link to your Jobs route -->
+              <li><a href="{{ url_for('job_monitor_jobs') }}">Jobs</a></li>
+              <!-- Link to your Watchers route -->
+              <li><a href="{{ url_for('job_monitor_watchers') }}">Watchers</a></li>
+            </div>
+          </ul>
+        </li>
 
       <!-- Configuration -->
       <li>
@@ -112,6 +136,16 @@
   </div>
   {% endblock %}
 </main>
-
+<div id="toast-notification" class="toast-container">
+  <div class="toast-content">
+    <div class="toast-icon">
+      <i class="fas fa-check-circle"></i>
+    </div>
+    <div class="toast-message">Operation completed successfully!</div>
+    <button class="toast-close">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+</div>
 </body>
 </html>

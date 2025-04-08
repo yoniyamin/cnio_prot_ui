@@ -1,10 +1,9 @@
 # src/watchers/watcher_manager.py
 import threading
 import time
-import queue
-from app import logger
+from src.utils import logger, log_dir  # Import logger from utils instead of app
 from src.watchers.file_watcher import FileWatcher
-from src.handlers.run_maxquant import MaxQuant_handler
+
 
 class WatcherManager:
     def __init__(self, db, job_queue_manager):
@@ -47,17 +46,35 @@ class WatcherManager:
         return watcher
 
     def stop_watcher(self, watcher_id):
-        """Stop a specific watcher."""
+        """Stop a specific watcher and its thread."""
+        logger.info(f"Attempting to stop watcher {watcher_id}")
+
+        # Update status in database (already done in the API endpoint)
+        # self.db.update_watcher_status(watcher_id, 'cancelled')
+
+        # Find and stop the watcher instance
         if watcher_id in self.watchers:
-            logger.info(f"Stopping watcher {watcher_id}")
-            self.watchers[watcher_id].stop()
+            logger.info(f"Found watcher {watcher_id} in active watchers, stopping it")
+            watcher = self.watchers[watcher_id]
+            watcher.stop()  # Call the stop method on the FileWatcher
 
             # If there's a thread for this watcher, wait for it to finish
             if watcher_id in self.threads:
-                self.threads[watcher_id].join(timeout=5)
+                logger.info(f"Joining thread for watcher {watcher_id}")
+                self.threads[watcher_id].join(timeout=5)  # Wait up to 5 seconds
                 del self.threads[watcher_id]
 
-            # Remove from active watchers
+            # Remove the watcher from our tracking
             del self.watchers[watcher_id]
             return True
-        return False
+
+        # Even if not in our tracking, try to create and stop it
+        # This is useful for watchers started in other processes/threads
+        try:
+            logger.info(f"Creating new FileWatcher for {watcher_id} to stop it")
+            temp_watcher = FileWatcher(watcher_id, self.db, self.job_queue_manager)
+            temp_watcher.stop()
+            return True
+        except Exception as e:
+            logger.error(f"Error stopping watcher {watcher_id}: {str(e)}")
+            return False

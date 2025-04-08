@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script type="module" src="{{ url_for('static', filename='js/watchers.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/job_monitor.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/ui_utils.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Watchers</h2>
+  <p class="subtitle">Manage file watchers</p>
+</div>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>File Watchers</h3>
+    <button id="create-watcher-btn" class="action-button primary">
+      <i class="fas fa-plus"></i>
+      <span>New Watcher</span>
+    </button>
+  </div>
+
+  <div class="controls-row">
+    <div class="filter-controls">
+      <button id="refresh-watchers" class="action-button secondary">
+        <i class="fas fa-sync-alt"></i>
+        <span>Refresh</span>
+      </button>
+      <div class="select-wrapper">
+        <select id="status-filter" class="filter-select">
+          <option value="all">All Status</option>
+          <option value="monitoring">Monitoring</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="paused">Paused</option>
+        </select>
+      </div>
+    </div>
+    <div class="search-controls">
+      <div class="search-wrapper">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="watcher-search" class="search-input" placeholder="Search watchers...">
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="watchers-table" class="data-table">
+      <thead>
+        <tr>
+          <th data-sort="id" class="sort-desc col-id">ID</th>
+          <th data-sort="name" class="col-name">Name</th>
+          <th data-sort="status" class="col-status">Status</th>
+          <th data-sort="file_pattern" class="col-pattern">Pattern</th>
+          <th data-sort="progress" class="col-progress">Progress</th>
+          <th data-sort="creation_time" class="col-created">Created</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="7" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Loading watchers...</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination-controls">
+    <button class="pagination-button" id="prev-page" disabled>
+      <i class="fas fa-chevron-left"></i>
+      <span>Previous</span>
+    </button>
+
+    <div class="pagination-info">
+      Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+      <div class="select-wrapper display-count-wrapper">
+        <select id="watcher-page-size" class="display-count-select">
+          <option value="4">4</option>
+          <option value="8" selected>8</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+          <option value="24">24</option>
+        </select>
+        <span class="display-count-label">per page</span>
+      </div>
+    </div>
+
+    <button class="pagination-button" id="next-page" disabled>
+      <span>Next</span>
+      <i class="fas fa-chevron-right"></i>
+    </button>
+  </div>
+</div>
+
+<!-- Create Watcher Modal -->
+<div id="create-watcher-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3>Create New File Watcher</h3>
+      <button id="close-modal" class="modal-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form id="watcher-form">
+        <div class="form-group">
+          <label for="folder_path">Folder to Watch</label>
+          <div class="input-with-button">
+            <input type="text" id="folder_path" name="folder_path" readonly placeholder="Select folder to monitor">
+            <button type="button" id="select-folder-btn" class="action-button secondary">Browse</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="file_pattern">File Pattern</label>
+          <input type="text" id="file_pattern" name="file_pattern" placeholder="*.txt;*.csv">
+          <div class="helper-text">Use semicolons to separate multiple patterns (e.g., *.raw;*.mzml)</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="job_type">Job Type</label>
+            <select id="job_type" name="job_type">
+              <option value="MaxQuant_Handler">MaxQuant</option>
+              <option value="DIANN_Handler">DIA-NN</option>
+              <option value="Spectronaut_Handler">Spectronaut</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="job_demands">Resource Demands</label>
+            <select id="job_demands" name="job_demands">
+              <option value="light">Light</option>
+              <option value="medium">Medium</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="job_name_prefix">Job Name Prefix</label>
+          <input type="text" id="job_name_prefix" name="job_name_prefix" placeholder="Auto_Job">
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-watcher" class="action-button secondary">Cancel</button>
+          <button type="submit" class="action-button primary">Create Watcher</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container modal-sm">
+    <div class="modal-header">
+      <h3>Confirm Action</h3>
+      <button class="modal-close confirm-cancel">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p id="confirm-message">Are you sure you want to perform this action?</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="action-button secondary confirm-cancel">Cancel</button>
+      <button id="confirm-action" class="action-button danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Watcher Details Template -->
+<template id="watcher-details-template">
+  <tr class="watcher-details-row">
+    <td colspan="7" class="details-container">
+      <div class="details-content">
+        <div class="details-header">
+          <h4>Captured Files</h4>
+          <div class="details-actions">
+            <button class="action-button secondary refresh-files">
+              <i class="fas fa-sync-alt"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table files-table">
+            <thead>
+              <tr>
+                <th data-sort="file_name">File Name</th>
+                <th data-sort="file_path">File Path</th>
+                <th data-sort="job_id">Job ID</th>
+                <th data-sort="status">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="4" class="loading-message">
+                  <div class="loading-spinner"></div>
+                  <span>Loading files...</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </td>
+  </tr>
+</template>
+{% endblock %}

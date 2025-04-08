@@ -35,6 +35,9 @@
         <input type="hidden" id="conditions_file" name="conditions_file">
         <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
       </div>
+      <div class="helper-text">
+        <button type="button" class="action-button secondary" style="padding: 0.3em 0.6em; margin-top: 0.5em;" onclick="downloadExampleConditionFile()">Download Example</button>
+      </div>
     </div>
 
     <div class="input-row">
@@ -86,6 +89,24 @@
   <div id="submission-result" class="submission-result" style="display:none;"></div>
 </div>
 
+<!-- Toast notification container -->
+<div id="toast-notification" class="toast">
+  <div class="toast-content">
+    <span class="toast-message"></span>
+    <button class="toast-close">&times;</button>
+  </div>
+</div>
+
+<script type="module">
+  // Import UI utilities
+  import { initToasts } from '/static/js/ui_utils.js';
+
+  // Initialize toast notifications
+  document.addEventListener('DOMContentLoaded', function() {
+    initToasts();
+  });
+</script>
+
 <script>
   // Function to select a directory
   function selectDirectory(fieldId) {
@@ -96,9 +117,9 @@
     displayField.classList.add('loading');
 
     // Bring window to front first
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.show_window) {
-        window.pywebview.api.show_window();
-      }
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.show_window) {
+      window.pywebview.api.show_window();
+    }
 
     // Use a Flask API endpoint instead of direct pywebview API
     fetch('/api/select-directory')
@@ -118,6 +139,63 @@
         displayField.value = originalValue;
         console.error("Error selecting directory:", error);
       });
+  }
+
+  function downloadExampleConditionFile() {
+    // Check if running in webview by checking if pywebview is available
+    const isWebView = typeof window.pywebview !== 'undefined';
+
+    if (isWebView) {
+      console.log("Using webview download method");
+      // In webview - get content and use API to save
+      fetch('/api/download-maxquant-example?webview=true')
+        .then(response => response.json())
+        .then(data => {
+          console.log("Got example data from server");
+          // Call the API function to save
+          window.pywebview.api.save_example_file(data.content, data.filename)
+            .then(result => {
+              console.log("Save result:", result);
+              if (result.success) {
+                window.showToast(`Example file saved to ${result.path}`, 'success');
+              } else if (!result.canceled) {
+                window.showToast('Error saving file: ' + (result.error || 'Unknown error'), 'error');
+              }
+            })
+            .catch(error => {
+              console.error("Error saving file:", error);
+              window.showToast('Error saving file. Please check the console for details.', 'error');
+            });
+        })
+        .catch(error => {
+          console.error("Error downloading example file:", error);
+          window.showToast('Error downloading example file', 'error');
+        });
+    } else {
+      console.log("Using browser download method");
+      // In regular browser - use normal download approach
+      fetch('/api/download-maxquant-example')
+        .then(response => {
+          if (response.ok) {
+            return response.blob();
+          }
+          throw new Error('Network response was not ok');
+        })
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = 'maxquant_conditions_example.tsv';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+          console.error("Error downloading example file:", error);
+          window.showToast('Error downloading example file', 'error');
+        });
+    }
   }
 
   // Function to select a file
@@ -142,15 +220,13 @@
             displayField.value = "";
             displayField.classList.remove('warning');
 
-            // Show error alert
-            alert(data.error);
+            // Show error toast
+            window.showToast(data.error, 'error');
           } else {
             // Set the path value
             document.getElementById(fieldId).value = data.path;
             displayField.value = data.path;
             displayField.classList.remove('warning');
-
-            // Note: Removed the automatic saving of defaults here
           }
         } else {
           // User canceled dialog, restore original value
@@ -205,11 +281,11 @@
     })
     .then(data => {
       // Show confirmation
-      alert('Default values have been saved!');
+      window.showToast('Default values have been saved!', 'success');
     })
     .catch(error => {
       console.error("Error saving defaults:", error);
-      alert('Error saving defaults. Please check the console for details.');
+      window.showToast('Error saving defaults. Please check the console for details.', 'error');
     });
   }
 
@@ -259,7 +335,7 @@
     // Check if at least one database is selected
     const databaseChoices = document.querySelectorAll('input[name="database_choices"]:checked');
     if (databaseChoices.length === 0) {
-      alert('Please select at least one database');
+      window.showToast('Please select at least one database', 'warning');
       return;
     }
 
@@ -277,11 +353,9 @@
     });
 
     if (missingFields) {
-      alert('Please fill in all required fields');
+      window.showToast('Please fill in all required fields', 'warning');
       return;
     }
-
-    // Note: Removed automatic saving of defaults here
 
     // Show submission status
     const submitBtn = document.querySelector('button[type="submit"]');
@@ -297,13 +371,21 @@
       method: 'POST',
       body: formData
     })
-    .then(response => response.text())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      return response.text();
+    })
     .then(result => {
-      // Display result in a result container
+      // Display result
       const resultContainer = document.getElementById('submission-result');
       resultContainer.innerHTML = result;
       resultContainer.style.display = 'block';
       resultContainer.scrollIntoView({ behavior: 'smooth' });
+
+      // Show success notification
+      window.showToast('MaxQuant job submitted successfully', 'success');
 
       // Reset button
       submitBtn.textContent = originalBtnText;
@@ -311,7 +393,7 @@
     })
     .catch(error => {
       console.error('Error submitting form:', error);
-      alert('Error submitting form. Please try again.');
+      window.showToast(`Error submitting form: ${error.message}`, 'error');
 
       // Reset button
       submitBtn.textContent = originalBtnText;

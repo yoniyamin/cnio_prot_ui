@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script type="module" src="{{ url_for('static', filename='js/job_monitor.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/ui_utils.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Dashboard</h2>
+  <p class="subtitle">Monitoring active Watchers and Jobs</p>
+</div>
+
+<!-- Running Watchers & Jobs Section -->
+<div class="section-container">
+  <div class="section-header">
+    <h3>Running Watchers & Jobs</h3>
+    <p class="section-stats">
+      {{ running_stats.total }} jobs:
+      {{ running_stats.running }} running,
+      {{ running_stats.waiting }} waiting,
+      {{ running_stats.completed }} completed
+    </p>
+  </div>
+
+  <div class="flashcard-grid">
+    {% for pair in running_pairs %}
+      <div class="flashcard job-card job-type-{{ pair.job['job_type']|lower }}"
+     data-job-id="{{ pair.job['job_id'] }}"
+     onclick="window.location.href='{{ url_for('job_monitor_jobs') }}?job_id={{ pair.job['job_id'] }}'"
+     style="cursor: pointer;"
+     tabindex="0"
+     onkeydown="if (event.key === 'Enter') window.location.href='{{ url_for('job_monitor_jobs') }}?job_id={{ pair.job['job_id'] }}';">
+        <!-- Card Header: Job Name and Job Type -->
+        <div class="card-header">
+          <h4 title="{{ pair.job['job_name'] }}">{{ pair.job['job_name'] }}</h4>
+          <span class="job-type">{{ pair.job['job_type'] }}</span>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body">
+          <!-- Watcher Info -->
+          <p>
+            <strong>Watcher #{{ pair.watcher.id }}:</strong>
+            <span class="status-badge {{ pair.watcher.status }}">{{ pair.watcher.status }}</span>
+            <span class="captured-files">
+              ({{ pair.watcher.captured_count }}/{{ pair.watcher.expected_count }} files captured)
+            </span>
+          </p>
+
+          <!-- Job Info -->
+          <p>
+            <strong>Job Status:</strong>
+            <span class="status-badge {{ pair.job['status'] }}">{{ pair.job['status'] }}</span>
+          </p>
+
+          <!-- Start Time -->
+          <p>
+            <strong>Start Time:</strong>
+            {{ pair.watcher.creation_time or 'Not started' }}
+          </p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Errored Jobs Section -->
+{% if errored_pairs %}
+<div class="section-container">
+  <div class="section-header">
+    <h3>Errored Jobs</h3>
+    <p class="section-stats">
+      {{ errored_stats.total }} errored jobs
+    </p>
+  </div>
+
+  <div class="flashcard-grid">
+    {% for pair in errored_pairs %}
+      <div class="flashcard job-card job-type-{{ pair.job['job_type']|lower }}"
+     data-job-id="{{ pair.job['job_id'] }}"
+     onclick="window.location.href='{{ url_for('job_monitor_jobs') }}?job_id={{ pair.job['job_id'] }}'"
+     style="cursor: pointer;"
+     tabindex="0"
+     onkeydown="if (event.key === 'Enter') window.location.href='{{ url_for('job_monitor_jobs') }}?job_id={{ pair.job['job_id'] }}';">
+        <!-- Card Header: Job Name and Job Type -->
+        <div class="card-header">
+          <h4 title="{{ pair.job['job_name'] }}">{{ pair.job['job_name'] }}</h4>
+          <span class="job-type">{{ pair.job['job_type'] }}</span>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body">
+          <!-- Watcher Info -->
+          <p>
+            <strong>Watcher #{{ pair.watcher.id }}:</strong>
+            <span class="status-badge {{ pair.watcher.status }}">{{ pair.watcher.status }}</span>
+            <span class="captured-files">
+              ({{ pair.watcher.captured_count }}/{{ pair.watcher.expected_count }} files captured)
+            </span>
+          </p>
+
+          <!-- Job Info -->
+          <p>
+            <strong>Job Status:</strong>
+            <span class="status-badge {{ pair.job['status'] }}">{{ pair.job['status'] }}</span>
+          </p>
+
+          <!-- Start Time -->
+          <p>
+            <strong>Start Time:</strong>
+            {{ pair.watcher.creation_time or 'Not started' }}
+          </p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

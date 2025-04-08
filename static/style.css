@@ -485,6 +485,76 @@ html.light-mode select {
   margin: 0 auto;
 }
 
+/* Toast Notification Styles */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  min-width: 250px;
+  max-width: 350px;
+  z-index: 1000;
+  transform: translateY(200%);
+  transition: transform 0.3s ease-out;
+  font-size: 0.9rem;
+}
+
+.toast.active {
+  transform: translateY(0);
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--tile-bg-clr);
+  color: var(--text-clr);
+  padding: 0.8rem 1rem;
+  border-radius: 0.4rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-left: 4px solid var(--accent-clr);
+}
+
+.toast-content.success {
+  border-left-color: #10b981; /* Green */
+}
+
+.toast-content.error {
+  border-left-color: #ef4444; /* Red */
+}
+
+.toast-content.warning {
+  border-left-color: #f59e0b; /* Yellow/Orange */
+}
+
+.toast-content.info {
+  border-left-color: var(--accent-clr); /* Blue */
+}
+
+.toast-message {
+  flex-grow: 1;
+  padding-right: 0.8rem;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-clr);
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0;
+  height: 24px;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
 /* Add extra white space at the bottom on mobile to prevent navbar overlap */
 @media (max-width: 800px) {
   main {
@@ -508,6 +578,14 @@ html.light-mode select {
 
   .action-button {
     width: 100%;
+  }
+
+  .toast {
+    bottom: 80px; /* Adjusted to show above mobile navbar */
+    left: 20px;
+    right: 20px;
+    min-width: auto;
+    max-width: none;
   }
 }
 
@@ -558,3 +636,4 @@ button:focus {
   outline: 2px solid var(--accent-clr);
   outline-offset: 2px;
 }
+

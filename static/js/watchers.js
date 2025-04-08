@@ -6,7 +6,7 @@
  ************************************/
 
 import { createProgressBar, formatDate } from './utils.js';
-
+let paginationInitialized = false;
 // ===== Global variables for watchers =====
 let watchersData = [];
 let filteredWatchers = [];
@@ -21,6 +21,9 @@ export function setWatchersPageSize(size) {
   currentPage = 1; // Reset to first page when changing page size
   updatePagination();
   displayWatchers(getPaginatedWatchers());
+
+  // Re-expand any expanded watchers
+  setTimeout(reExpandWatchers, 100);
 }
 
 // ====== Fetch watchers from server ======
@@ -210,7 +213,10 @@ function updatePagination() {
 
   if (prevBtn) prevBtn.disabled = currentPage <= 1;
   if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+
+  console.log(`Pagination updated: Page ${currentPage}/${totalPages}, showing ${itemsPerPage} items per page`);
 }
+
 
 // ====== Display watchers with pagination ======
 function displayWatchers(watchers) {
@@ -309,9 +315,6 @@ function displayWatchers(watchers) {
     // Create label with file counts
     const progressLabel = `${processedFiles}/${totalFiles} files`;
 
-    // Log the progress calculation for debugging
-    console.log(`Watcher ${watcher.id} progress: ${progressLabel} (${percentComplete}%)`);
-
     // Add the progress bar to the cell
     progressCell.appendChild(createProgressBar(percentComplete, progressLabel));
     row.appendChild(progressCell);
@@ -356,6 +359,11 @@ function displayWatchers(watchers) {
 
   // Add event listeners after creating the rows
   attachRowEventListeners();
+
+  // Update pagination UI
+  updatePagination();
+
+  console.log(`Displayed ${watchers.length} watchers on page ${currentPage}`);
 }
 
 function attachRowEventListeners() {
@@ -438,12 +446,12 @@ function createWatcherRow(watcher) {
       <td>${formattedDate}</td>
       <td>
        <div class="action-icons">
-              <img src="/static/images/listfiles.png" alt="Show Files" class="toggle-details" title="Show Files">
+              <img src="/images/listfiles.png" alt="Show Files" class="toggle-details" title="Show Files">
               ${
-                watcher.status === 'monitoring'
-                  ? `<img src="/static/images/stop.png" alt="Terminate" class="stop-watcher" title="Terminate Watcher">`
-                  : ''
-              }
+        watcher.status === 'monitoring'
+            ? `<img src="/static/images/stop.png" alt="Terminate" class="stop-watcher" title="Terminate Watcher">`
+            : ''
+    }
       </div>
       </td>
     `;
@@ -547,14 +555,27 @@ function toggleWatcherDetails(watcherId) {
 }
 
 function reExpandWatchers() {
-  // If some watchers were expanded, expand them again
-  expandedWatchers.forEach((id) => {
-    const row = document.querySelector(`.watcher-row[data-id="${id}"]`);
-    if (row) toggleWatcherDetails(id);
+  console.log("Re-expanding watcher details for:", Array.from(expandedWatchers));
+
+  // For each expanded watcher ID
+  expandedWatchers.forEach((watcherId) => {
+    // Check if this watcher is currently visible on this page
+    const watcherRow = document.querySelector(`tr[data-watcher-id="${watcherId}"]`);
+
+    if (watcherRow) {
+      console.log(`Re-expanding watcher ${watcherId} details`);
+      // If the details row doesn't exist yet, create it
+      if (!document.querySelector(`.watcher-details-row[data-watcher-id="${watcherId}"]`)) {
+        toggleWatcherDetails(watcherId);
+      }
+    } else {
+      console.log(`Watcher ${watcherId} not on current page, can't expand`);
+    }
   });
 }
 
 // ====== Load watcher files ======
+// Enhanced loadWatcherFiles function with improved debugging and display logic
 function loadWatcherFiles(watcherId, detailsRow) {
   const tableBody = detailsRow.querySelector('.files-table tbody');
   if (!tableBody) {
@@ -573,9 +594,17 @@ function loadWatcherFiles(watcherId, detailsRow) {
 
   console.log(`Fetching files for watcher ID: ${watcherId}`);
 
-  // Use the enhanced fetch function
-  fetchWithLogging(`/api/watchers/${watcherId}/files`)
+  fetch(`/api/watchers/${watcherId}/files`)
+    .then((response) => {
+      console.log(`Files API response status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
     .then((data) => {
+      console.log("Files API full response:", data);
+
       if (data.error) {
         tableBody.innerHTML = `
           <tr><td colspan="4" class="loading-message">
@@ -584,23 +613,34 @@ function loadWatcherFiles(watcherId, detailsRow) {
         return;
       }
 
-      // Handle different possible response structures
+      // Handle different possible response structures with better logging
       let files = [];
       if (Array.isArray(data)) {
+        console.log("Response is a direct array of files");
         files = data;
       } else if (data.files && Array.isArray(data.files)) {
+        console.log("Response has 'files' property with array of files");
         files = data.files;
       } else if (data.captured_files && Array.isArray(data.captured_files)) {
+        console.log("Response has 'captured_files' property with array of files");
         files = data.captured_files;
       } else {
         // Try to extract files from any property that is an array
+        console.log("Searching for any array property in response");
         const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
         if (arrayProps.length > 0) {
+          console.log(`Found array property: ${arrayProps[0]}`);
           files = data[arrayProps[0]];
+        } else {
+          console.error("Could not find files array in response", data);
         }
       }
 
-      if (!files.length) {
+      console.log(`Found ${files.length} files`, files);
+
+      // Debug empty files array
+      if (!files || files.length === 0) {
+        console.log("No files found in response", data);
         tableBody.innerHTML = `
           <tr><td colspan="4" class="loading-message">
             <span>No files captured yet</span>
@@ -608,15 +648,32 @@ function loadWatcherFiles(watcherId, detailsRow) {
         return;
       }
 
-      // Clear and populate
-      tableBody.innerHTML = '';
-      files.forEach((file) => {
-        const row = createFileRow(file);
-        tableBody.appendChild(row);
-      });
+      // Clear and populate with better error handling
+      try {
+        tableBody.innerHTML = '';
 
-      // Hook up sorting on file table
-      initFileTableSort(detailsRow, files);
+        files.forEach((file) => {
+          if (!file) {
+            console.warn("Skipping undefined or null file entry");
+            return;
+          }
+
+          console.log("Creating row for file:", file);
+          const row = createFileRow(file);
+          tableBody.appendChild(row);
+        });
+
+        // Hook up sorting on file table
+        initFileTableSort(detailsRow, files);
+
+        console.log("Successfully populated files table");
+      } catch (err) {
+        console.error("Error creating file rows:", err);
+        tableBody.innerHTML = `
+          <tr><td colspan="4" class="loading-message">
+            <span class="text-red-500">Error displaying files: ${err.message}</span>
+          </td></tr>`;
+      }
     })
     .catch((err) => {
       console.error('Error loading files:', err);
@@ -634,23 +691,60 @@ function loadWatcherFiles(watcherId, detailsRow) {
     });
 }
 
-export function initializeWatcherActions() {
-  document.querySelector('#watchers-table tbody')?.addEventListener('click', (e) => {
-    const toggleDetails = e.target.closest('.toggle-details');
-    const stopWatcher = e.target.closest('.stop-watcher');
+export function initWatchersPagination() {
+  if (paginationInitialized) {
+    console.log("Watchers pagination already initialized, skipping");
+    return;
+  }
 
-    if (toggleDetails) {
-      const row = toggleDetails.closest('tr');
-      const watcherId = row.dataset.watcherId;
-      toggleWatcherDetails(watcherId, row);
-    }
+  console.log("Initializing watchers pagination event listeners");
 
-    if (stopWatcher) {
-      const row = stopWatcher.closest('tr');
-      const watcherId = row.dataset.watcherId;
-      stopWatcher(watcherId);
-    }
-  });
+  // Remove any existing listeners first (to be safe)
+  const prevBtn = document.getElementById('prev-page');
+  const nextBtn = document.getElementById('next-page');
+  const pageSizeSelect = document.getElementById('watcher-page-size');
+
+  if (prevBtn) {
+    // Remove old listeners by cloning and replacing the button
+    const newPrevBtn = prevBtn.cloneNode(true);
+    prevBtn.parentNode.replaceChild(newPrevBtn, prevBtn);
+
+    // Add new listener
+    newPrevBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("Previous button clicked");
+      prevWatchersPage();
+    });
+  }
+
+  if (nextBtn) {
+    // Remove old listeners by cloning and replacing the button
+    const newNextBtn = nextBtn.cloneNode(true);
+    nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+
+    // Add new listener
+    newNextBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("Next button clicked");
+      nextWatchersPage();
+    });
+  }
+
+  if (pageSizeSelect) {
+    // Remove old listeners by cloning and replacing the select
+    const newPageSizeSelect = pageSizeSelect.cloneNode(true);
+    pageSizeSelect.parentNode.replaceChild(newPageSizeSelect, pageSizeSelect);
+
+    // Add new listener
+    newPageSizeSelect.addEventListener('change', function(e) {
+      console.log(`Page size changed to ${this.value}`);
+      setWatchersPageSize(parseInt(this.value, 10));
+    });
+  }
+
+  paginationInitialized = true;
 }
 // ====== Create file row ======
 function createFileRow(file) {
@@ -909,6 +1003,25 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Action icons:', document.querySelectorAll('.action-icon').length);
   console.log('Toggle details:', document.querySelectorAll('.toggle-details').length);
   console.log('Watchers table:', !!document.querySelector('#watchers-table'));
+
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  // If watchers-table is found on this page, let's auto-load watchers
+  if (document.querySelector('#watchers-table')) {
+    console.log("Found watchers-table, auto-calling loadWatchers()");
+    loadWatchers();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const createWatcherBtn = document.getElementById('create-watcher-btn');
+  const modal = document.getElementById('create-watcher-modal');
+  if (createWatcherBtn && modal) {
+    createWatcherBtn.addEventListener('click', () => {
+      modal.classList.add('active');
+    });
+  }
 });
 
 function updateExpandIcon(watcherId) {
@@ -928,16 +1041,37 @@ function updateExpandIcon(watcherId) {
 // ====== Pagination button helpers ======
 export function prevWatchersPage() {
   if (currentPage > 1) {
+    console.log(`Moving from page ${currentPage} to ${currentPage - 1}`);
     currentPage--;
-    displayWatchers();
+    updatePagination();
+    displayWatchers(getPaginatedWatchers());
+
+    // Re-expand any expanded watchers after page change
+    setTimeout(reExpandWatchers, 100);
   }
 }
 
 export function nextWatchersPage() {
-  const totalPages = Math.ceil(filteredWatchers.length / itemsPerPage);
+  const totalPages = Math.ceil((filteredWatchers?.length || 0) / itemsPerPage);
   if (currentPage < totalPages) {
+    console.log(`Moving from page ${currentPage} to ${currentPage + 1}`);
     currentPage++;
-    displayWatchers();
+    updatePagination();
+    displayWatchers(getPaginatedWatchers());
+
+    // Re-expand any expanded watchers after page change
+    setTimeout(reExpandWatchers, 100);
   }
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('#watchers-table')) {
+    console.log("Setting up watchers functionality");
+
+    // Initialize pagination once
+    initWatchersPagination();
+
+    // Initial load of watchers
+    loadWatchers();
+  }
+});

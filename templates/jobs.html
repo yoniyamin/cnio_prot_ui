@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script type="module" src="{{ url_for('static', filename='js/jobs.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/job_monitor.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/ui_utils.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<script>
+// Inject jobs data into window.jobsData for jobs.js to use
+window.jobsData = {{ jobs | tojson }};
+</script>
+
+<div class="page-header">
+  <h2>Jobs</h2>
+  <p class="subtitle">Manage and monitor all jobs</p>
+</div>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>Jobs Table</h3>
+  </div>
+    <div class="controls-row">
+      <div class="filter-controls">
+        <button id="refresh-jobs" class="action-button secondary">
+          <i class="fas fa-sync-alt"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  <div class="table-container">
+    <table id="jobs-table" class="data-table">
+      <thead>
+        <tr>
+          <th data-sort="id" class="sort-desc col-id">ID</th>
+          <th data-sort="name" class="col-name">Name</th>
+          <th data-sort="status" class="col-status">Status</th>
+          <th data-sort="type" class="col-type">Type</th>
+          <th data-sort="progress" class="col-progress">Progress</th>
+          <th data-sort="creation_time" class="col-created">Created</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="7" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Loading jobs...</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination-controls">
+    <button class="pagination-button" id="jobs-prev-page" disabled>
+      <i class="fas fa-chevron-left"></i>
+      <span>Previous</span>
+    </button>
+    <div class="pagination-info">
+      Page <span id="jobs-current-page">1</span> of <span id="jobs-total-pages">1</span>
+      <div class="select-wrapper display-count-wrapper">
+        <select id="jobs-page-size" class="display-count-select">
+          <option value="4">4</option>
+          <option value="8" selected>8</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+          <option value="24">24</option>
+        </select>
+        <span class="display-count-label">per page</span>
+      </div>
+    </div>
+    <button class="pagination-button" id="jobs-next-page" disabled>
+      <span>Next</span>
+      <i class="fas fa-chevron-right"></i>
+    </button>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container modal-sm">
+    <div class="modal-header">
+      <h3>Confirm Action</h3>
+      <button class="modal-close confirm-cancel">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p id="confirm-message">Are you sure you want to perform this action?</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="action-button secondary confirm-cancel">Cancel</button>
+      <button id="confirm-action" class="action-button danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Enhanced script for highlighting jobs
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobId = urlParams.get('job_id');
+
+  // Try to highlight the job row multiple times to handle any race conditions
+  // or timing issues with asynchronous loading
+  if (jobId) {
+    // Try immediately
+    highlightJob(jobId);
+
+    // Try again after a short delay to ensure DOM is updated
+    setTimeout(() => highlightJob(jobId), 300);
+
+    // Try once more after the page is fully loaded
+    setTimeout(() => highlightJob(jobId), 1000);
+  }
+
+  function highlightJob(id) {
+    const jobRow = document.querySelector(`.job-row[data-job-id="${id}"]`);
+    if (jobRow) {
+      // Remove any existing highlights first
+      document.querySelectorAll('.job-row.highlighted').forEach(row => {
+        row.classList.remove('highlighted');
+      });
+
+      // Add highlight to this row
+      jobRow.classList.add('highlighted');
+
+      // Scroll the row into view
+      jobRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      console.log(`Job #${id} highlighted successfully`);
+    } else {
+      console.warn(`Couldn't find job row for ID ${id}`);
+    }
+  }
+});
+
+// If we have the highlightSelectedJob function available (from jobs.js module)
+// use it when the page refreshes via AJAX
+if (typeof window.highlightSelectedJob === 'function') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const refreshBtn = document.getElementById('refresh-jobs');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        // After refresh completes, re-apply highlighting
+        setTimeout(window.highlightSelectedJob, 500);
+      });
+    }
+  });
+}
+</script>
+
+{% endblock %}
