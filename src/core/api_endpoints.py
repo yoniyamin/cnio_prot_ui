@@ -270,6 +270,54 @@ def api_get_captured_files(watcher_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/jobs/<job_id>')
+def api_get_job(job_id):
+    """Get details for a specific job"""
+    try:
+        logger.info(f"API request: get job details for job {job_id}")
+
+        # First check if the job is in memory
+        in_memory_job = None
+        # Try to find the job in running, waiting, queued, and completed jobs
+        for job_set, lock in [
+            (job_queue_manager.running_jobs.values(), None),
+            (job_queue_manager.waiting_jobs, job_queue_manager.waiting_jobs_lock),
+            (job_queue_manager.queued_jobs, job_queue_manager.queued_jobs_lock),
+            (job_queue_manager.completed_jobs, job_queue_manager.completed_jobs_lock)
+        ]:
+            if lock is not None and not lock.acquire(blocking=False):
+                continue
+
+            try:
+                jobs = job_set if lock is None else list(job_set)
+                for job in jobs:
+                    if str(job.job_id) == str(job_id):
+                        in_memory_job = job
+                        break
+            finally:
+                if lock is not None:
+                    lock.release()
+
+            if in_memory_job:
+                break
+
+        # If found in memory, return it
+        if in_memory_job:
+            return jsonify({"job": in_memory_job.to_dict()})
+
+        # If not found in memory, check the database
+        from src.database.jobs_db import JobsDB
+        jobs_db = JobsDB()
+        job = jobs_db.get_job(job_id)
+
+        if job:
+            return jsonify({"job": job})
+        else:
+            return jsonify({"error": f"Job {job_id} not found"}), 404
+
+    except Exception as e:
+        logger.error(f"Error getting job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 @app.route('/api/jobs')
 def api_get_jobs():
     try:
@@ -434,66 +482,79 @@ def api_stop_job(job_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/jobs/<job_id>/files')
-def api_get_job_files(job_id):
+@app.route('/api/jobs/<job_id>/demands')
+def api_get_job_demands(job_id):
+    """Get the job_demands configuration for a specific job"""
     try:
-        logger.info(f"API request: get files for job {job_id}")
+        logger.info(f"API request: get job demands for job {job_id}")
 
-        # Try to get files from watcher linked to this job
-        watcher_id = None
-
-        # Check for watcher_id in in-memory jobs first
+        # First check for in-memory job
+        in_memory_job = None
         for job_set, lock in [
             (job_queue_manager.running_jobs.values(), None),
             (job_queue_manager.waiting_jobs, job_queue_manager.waiting_jobs_lock),
             (job_queue_manager.queued_jobs, job_queue_manager.queued_jobs_lock),
             (job_queue_manager.completed_jobs, job_queue_manager.completed_jobs_lock)
         ]:
-            if lock and not lock.acquire(blocking=False):
+            if lock is not None and not lock.acquire(blocking=False):
                 continue
 
             try:
                 jobs = job_set if lock is None else list(job_set)
                 for job in jobs:
-                    if job.job_id == job_id:
-                        # Check if job has watcher_id in extras_dict
-                        if hasattr(job, 'extras_dict') and 'watcher_id' in job.extras_dict:
-                            watcher_id = job.extras_dict['watcher_id']
-                            break
+                    if str(job.job_id) == str(job_id):
+                        in_memory_job = job
+                        break
             finally:
-                if lock:
+                if lock is not None:
                     lock.release()
 
-            if watcher_id:
+            if in_memory_job:
                 break
 
-        # If not found in memory, check database
-        if not watcher_id:
-            from src.database.jobs_db import JobsDB
-            jobs_db = JobsDB()
-            watcher_id = jobs_db.get_watcher_id_for_job(job_id)
+        # If found in memory and has job_demands
+        if in_memory_job and hasattr(in_memory_job, 'job_demands'):
+            job_demands = in_memory_job.job_demands
+            if isinstance(job_demands, str):
+                try:
+                    import json
+                    return jsonify({"demands": json.loads(job_demands)})
+                except:
+                    return jsonify({"demands": {"raw_config": job_demands}})
+            elif isinstance(job_demands, dict):
+                return jsonify({"demands": job_demands})
 
-        # If we have a watcher_id, get files from that watcher
-        if watcher_id:
-            files = watcher_db.get_captured_files(watcher_id)
+        # If not found in memory or no job_demands, check database
+        from src.database.jobs_db import JobsDB
+        jobs_db = JobsDB()
+        job_demands = jobs_db.get_job_demands(job_id)
 
-            # Format files for JSON response
-            file_list = []
-            for f in files:
-                file_list.append({
-                    "id": f[0] if len(f) > 0 else None,
-                    "job_id": f[1] if len(f) > 1 else None,
-                    "watcher_id": f[2] if len(f) > 2 else None,
-                    "file_name": f[3] if len(f) > 3 else '',
-                    "file_path": f[4] if len(f) > 4 else '',
-                    "capture_time": f[5] if len(f) > 5 else None,
-                    "status": "captured"
-                })
-
-            return jsonify({"files": file_list})
+        if job_demands:
+            return jsonify({"demands": job_demands})
         else:
-            # Fallback: Job might not be associated with a watcher
-            # For example, it could be a directly submitted job
+            return jsonify({"demands": {}}), 404
+
+    except Exception as e:
+        logger.error(f"Error getting job demands: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/jobs/<job_id>/files')
+def api_get_job_files(job_id):
+    """Get files associated with a specific job by redirecting to the watcher's files endpoint"""
+    try:
+        logger.info(f"API request: get files for job {job_id}")
+
+        # Get the watcher_id from the jobs database
+        from src.database.jobs_db import JobsDB
+        jobs_db = JobsDB()
+        watcher_id = jobs_db.get_watcher_id_for_job(job_id)
+
+        if watcher_id:
+            logger.info(f"Found watcher ID {watcher_id} for job {job_id}, redirecting to watcher files API")
+            # Simply call the watcher files API directly
+            return api_get_captured_files(watcher_id)
+        else:
+            logger.info(f"No watcher ID found for job {job_id}")
             return jsonify({"files": []})
 
     except Exception as e:

@@ -5,74 +5,178 @@
 <div class="section-container">
   <form id="maxquant-form" method="POST" action="{{ url_for('maxquant') }}" enctype="multipart/form-data">
 
-    <div class="input-row">
-      <label for="job_name">Job Name:</label>
-      <input type="text" id="job_name" name="job_name" placeholder="My MaxQuant Analysis">
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button type="button" class="tab-button active" onclick="openTab('general-tab')">General</button>
+      <button type="button" class="tab-button" onclick="openTab('search-tab')">Search Parameters</button>
+      <button type="button" class="tab-button" onclick="openTab('advanced-tab')">Advanced</button>
     </div>
 
-    <div class="input-row">
-      <label for="fasta_folder">Fasta Folder:</label>
-      <div class="file-path-container">
-        <input type="text" id="fasta_folder_display" class="file-path-display" readonly placeholder="Select FASTA directory">
-        <input type="hidden" id="fasta_folder" name="fasta_folder">
-        <button type="button" class="file-select-btn" onclick="selectDirectory('fasta_folder')">Browse</button>
-      </div>
-    </div>
+    <!-- General Tab -->
+    <div id="general-tab" class="tab-content active">
+      <div class="section-container">
+        <h3>General Settings</h3>
 
-    <div class="input-row">
-      <label for="output_folder">Output Folder:</label>
-      <div class="file-path-container">
-        <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
-        <input type="hidden" id="output_folder" name="output_folder">
-        <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="conditions_file">Conditions File:</label>
-      <div class="file-path-container">
-        <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
-        <input type="hidden" id="conditions_file" name="conditions_file">
-        <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
-      </div>
-      <div class="helper-text">
-        <button type="button" class="action-button secondary" style="padding: 0.3em 0.6em; margin-top: 0.5em;" onclick="downloadExampleConditionFile()">Download Example</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="mq_path">MaxQuant Path:</label>
-      <div class="file-path-container">
-        <input type="text" id="mq_path_display" class="file-path-display" readonly placeholder="Path to MaxQuantCmd.exe">
-        <input type="hidden" id="mq_path" name="mq_path">
-        <button type="button" class="file-select-btn" onclick="selectFile('mq_path', '.exe')">Browse</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="mq_version">MaxQuant Version:</label>
-      <select id="mq_version" name="mq_version" required>
-        <option value="2.1.4.0">2.1.4.0</option>
-        <option value="2.1.3.0">2.1.3.0</option>
-        <option value="2.0.3.0">2.0.3.0</option>
-        <option value="1.6.17.0">1.6.17.0</option>
-      </select>
-    </div>
-
-    <div class="input-row">
-      <label>Select Databases:</label>
-      <div class="checkbox-group">
-        <div class="checkbox-item">
-          <input type="checkbox" id="db_human" name="database_choices" value="HUMAN">
-          <label for="db_human">Human</label>
+        <div class="input-row">
+          <label for="job_name">Job Name:</label>
+          <input type="text" id="job_name" name="job_name" placeholder="My MaxQuant Analysis">
         </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="db_mouse" name="database_choices" value="MOUSE">
-          <label for="db_mouse">Mouse</label>
+
+        <div class="input-row">
+          <label for="fasta_folder">Fasta Folder:</label>
+          <div class="file-path-container">
+            <input type="text" id="fasta_folder_display" class="file-path-display" readonly placeholder="Select FASTA directory">
+            <input type="hidden" id="fasta_folder" name="fasta_folder">
+            <button type="button" class="file-select-btn" onclick="selectDirectory('fasta_folder')">Browse</button>
+          </div>
         </div>
-        <div class="checkbox-item">
-          <input type="checkbox" id="db_yeast" name="database_choices" value="YEAST">
-          <label for="db_yeast">Yeast</label>
+
+        <div class="input-row">
+          <label for="output_folder">Output Folder:</label>
+          <div class="file-path-container">
+            <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
+            <input type="hidden" id="output_folder" name="output_folder">
+            <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label for="conditions_file">Conditions File:</label>
+          <div class="file-path-container">
+            <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
+            <input type="hidden" id="conditions_file" name="conditions_file">
+            <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
+          </div>
+          <div class="helper-text">
+            <button type="button" class="action-button secondary" style="padding: 0.3em 0.6em; margin-top: 0.5em;" onclick="downloadExampleConditionFile()">Download Example</button>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label for="mq_path">MaxQuant Path:</label>
+          <div class="file-path-container">
+            <input type="text" id="mq_path_display" class="file-path-display" readonly placeholder="Path to MaxQuantCmd.exe">
+            <input type="hidden" id="mq_path" name="mq_path">
+            <button type="button" class="file-select-btn" onclick="selectFile('mq_path', '.exe')">Browse</button>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label for="mq_version">MaxQuant Version:</label>
+          <select id="mq_version" name="mq_version" required>
+            <option value="2.1.4.0">2.1.4.0</option>
+            <option value="2.1.3.0">2.1.3.0</option>
+            <option value="2.0.3.0">2.0.3.0</option>
+            <option value="1.6.17.0">1.6.17.0</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Parameters Tab -->
+    <div id="search-tab" class="tab-content">
+      <div class="section-container">
+        <h3>Search Parameters</h3>
+
+        <div class="input-row">
+          <label for="protein_quantification">Protein Quantification:</label>
+          <select id="protein_quantification" name="protein_quantification">
+            <option value="Razor + Unique" selected>Razor + Unique</option>
+            <option value="Unique">Unique</option>
+            <option value="All">All</option>
+          </select>
+        </div>
+
+        <div class="input-row">
+          <label for="missed_cleavages">Missed Cleavages:</label>
+          <input type="text" id="missed_cleavages" name="missed_cleavages" value="2">
+        </div>
+
+        <div class="input-row">
+          <label for="fixed_mods">Fixed Modifications:</label>
+          <input type="text" id="fixed_mods" name="fixed_mods" value="Carbamidomethyl (C)">
+        </div>
+
+        <div class="input-row">
+          <label for="variable_mods">Variable Modifications:</label>
+          <input type="text" id="variable_mods" name="variable_mods" value="Oxidation (M), Acetyl (Protein N-term)">
+        </div>
+
+        <div class="input-row">
+          <label for="enzymes">Enzymes:</label>
+          <input type="text" id="enzymes" name="enzymes" value="Trypsin/P">
+        </div>
+
+        <div class="input-row">
+          <div class="checkbox-item">
+            <input type="checkbox" id="match_between_runs" name="match_between_runs">
+            <label for="match_between_runs">Match Between Runs</label>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div class="checkbox-item">
+            <input type="checkbox" id="second_peptide" name="second_peptide">
+            <label for="second_peptide">Use Second Peptide</label>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label>Select Databases:</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="db_human" name="database_choices" value="HUMAN">
+              <label for="db_human">Human</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="db_mouse" name="database_choices" value="MOUSE">
+              <label for="db_mouse">Mouse</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="db_yeast" name="database_choices" value="YEAST">
+              <label for="db_yeast">Yeast</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Tab -->
+    <div id="advanced-tab" class="tab-content">
+      <div class="section-container">
+        <h3>Advanced Settings</h3>
+
+        <div class="input-row">
+          <label for="num_threads">Number of Threads:</label>
+          <input type="text" id="num_threads" name="num_threads" value="16">
+        </div>
+
+        <div class="input-row">
+          <label for="id_parse_rule">ID Parse Rule:</label>
+          <input type="text" id="id_parse_rule" name="id_parse_rule" value=">.*\\|(.*)\\|">
+        </div>
+
+        <div class="input-row">
+          <label for="desc_parse_rule">Description Parse Rule:</label>
+          <input type="text" id="desc_parse_rule" name="desc_parse_rule" value=">(.*)" >
+        </div>
+
+        <div class="input-row">
+          <label for="andromeda_path">Andromeda Path:</label>
+          <div class="file-path-container">
+            <input type="text" id="andromeda_path_display" class="file-path-display" value="C:\\Temp\\Andromeda" placeholder="Andromeda path">
+            <input type="hidden" id="andromeda_path" name="andromeda_path" value="C:\\Temp\\Andromeda">
+            <button type="button" class="file-select-btn" onclick="selectDirectory('andromeda_path')">Browse</button>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <label for="mq_params_path">MQ Params File:</label>
+          <div class="file-path-container">
+            <input type="text" id="mq_params_path_display" class="file-path-display" readonly placeholder="Select MQ parameters file (.xml)">
+            <input type="hidden" id="mq_params_path" name="mq_params_path">
+            <button type="button" class="file-select-btn" onclick="selectFile('mq_params_path', '.xml')">Browse</button>
+          </div>
         </div>
       </div>
     </div>
@@ -108,6 +212,32 @@
 </script>
 
 <script>
+  // Tab functionality
+  function openTab(tabId) {
+    // Hide all tab contents
+    const tabContents = document.getElementsByClassName('tab-content');
+    for (let i = 0; i < tabContents.length; i++) {
+      tabContents[i].classList.remove('active');
+    }
+
+    // Remove active class from all tab buttons
+    const tabButtons = document.getElementsByClassName('tab-button');
+    for (let i = 0; i < tabButtons.length; i++) {
+      tabButtons[i].classList.remove('active');
+    }
+
+    // Show the selected tab content and activate the button
+    document.getElementById(tabId).classList.add('active');
+
+    // Find and activate the button
+    const activeButton = Array.from(tabButtons).find(button =>
+      button.getAttribute('onclick').includes(tabId)
+    );
+    if (activeButton) {
+      activeButton.classList.add('active');
+    }
+  }
+
   // Function to select a directory
   function selectDirectory(fieldId) {
     // Show loading indicator
@@ -250,6 +380,22 @@
         mq_path: document.getElementById('mq_path').value,
         mq_version: document.getElementById('mq_version').value,
 
+        // Search parameters
+        protein_quantification: document.getElementById('protein_quantification').value,
+        missed_cleavages: document.getElementById('missed_cleavages').value,
+        fixed_mods: document.getElementById('fixed_mods').value,
+        variable_mods: document.getElementById('variable_mods').value,
+        enzymes: document.getElementById('enzymes').value,
+        match_between_runs: document.getElementById('match_between_runs').checked,
+        second_peptide: document.getElementById('second_peptide').checked,
+
+        // Advanced parameters
+        num_threads: document.getElementById('num_threads').value,
+        id_parse_rule: document.getElementById('id_parse_rule').value,
+        desc_parse_rule: document.getElementById('desc_parse_rule').value,
+        andromeda_path: document.getElementById('andromeda_path').value,
+        mq_params_path: document.getElementById('mq_params_path').value,
+
         // Database selections - grab any checked databases
         database_choices: Array.from(
           document.querySelectorAll('input[name="database_choices"]:checked')
@@ -259,7 +405,7 @@
 
     // Only include values that are not empty
     Object.keys(params.defaults).forEach(key => {
-      if (!params.defaults[key] ||
+      if (params.defaults[key] === "" ||
           (Array.isArray(params.defaults[key]) && params.defaults[key].length === 0)) {
         delete params.defaults[key];
       }
@@ -306,6 +452,58 @@
             document.getElementById('mq_version').value = defaults.mq_version;
           }
 
+          // Set search parameters if present
+          if (defaults.protein_quantification) {
+            document.getElementById('protein_quantification').value = defaults.protein_quantification;
+          }
+
+          if (defaults.missed_cleavages) {
+            document.getElementById('missed_cleavages').value = defaults.missed_cleavages;
+          }
+
+          if (defaults.fixed_mods) {
+            document.getElementById('fixed_mods').value = defaults.fixed_mods;
+          }
+
+          if (defaults.variable_mods) {
+            document.getElementById('variable_mods').value = defaults.variable_mods;
+          }
+
+          if (defaults.enzymes) {
+            document.getElementById('enzymes').value = defaults.enzymes;
+          }
+
+          if (defaults.match_between_runs !== undefined) {
+            document.getElementById('match_between_runs').checked = defaults.match_between_runs;
+          }
+
+          if (defaults.second_peptide !== undefined) {
+            document.getElementById('second_peptide').checked = defaults.second_peptide;
+          }
+
+          // Set advanced parameters if present
+          if (defaults.num_threads) {
+            document.getElementById('num_threads').value = defaults.num_threads;
+          }
+
+          if (defaults.id_parse_rule) {
+            document.getElementById('id_parse_rule').value = defaults.id_parse_rule;
+          }
+
+          if (defaults.desc_parse_rule) {
+            document.getElementById('desc_parse_rule').value = defaults.desc_parse_rule;
+          }
+
+          if (defaults.andromeda_path) {
+            document.getElementById('andromeda_path').value = defaults.andromeda_path;
+            document.getElementById('andromeda_path_display').value = defaults.andromeda_path;
+          }
+
+          if (defaults.mq_params_path) {
+            document.getElementById('mq_params_path').value = defaults.mq_params_path;
+            document.getElementById('mq_params_path_display').value = defaults.mq_params_path;
+          }
+
           // Set database checkboxes if present
           if (defaults.database_choices && Array.isArray(defaults.database_choices)) {
             // Uncheck all first
@@ -336,17 +534,24 @@
     const databaseChoices = document.querySelectorAll('input[name="database_choices"]:checked');
     if (databaseChoices.length === 0) {
       window.showToast('Please select at least one database', 'warning');
+      // Switch to the search tab to show the database selection
+      openTab('search-tab');
       return;
     }
 
     // Check required fields
     const requiredFields = ['fasta_folder', 'output_folder', 'conditions_file', 'mq_path'];
     let missingFields = false;
+    let missingInTab = null;
 
     requiredFields.forEach(field => {
       if (!document.getElementById(field).value) {
         document.getElementById(field + '_display').classList.add('error');
         missingFields = true;
+        // Determine which tab has missing fields
+        if (field === 'fasta_folder' || field === 'output_folder' || field === 'conditions_file' || field === 'mq_path') {
+          missingInTab = 'general-tab';
+        }
       } else {
         document.getElementById(field + '_display').classList.remove('error');
       }
@@ -354,6 +559,10 @@
 
     if (missingFields) {
       window.showToast('Please fill in all required fields', 'warning');
+      // Switch to the tab with missing fields
+      if (missingInTab) {
+        openTab(missingInTab);
+      }
       return;
     }
 
@@ -401,4 +610,42 @@
     });
   });
 </script>
+
+<style>
+/* Tab styles */
+.tab-navigation {
+  display: flex;
+  border-bottom: 1px solid var(--line-clr);
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  margin-right: 5px;
+  cursor: pointer;
+  color: var(--text-clr);
+  border-radius: 5px 5px 0 0;
+  transition: background-color 0.2s;
+}
+
+.tab-button:hover {
+  background-color: var(--hover-clr);
+}
+
+.tab-button.active {
+  background-color: var(--hover-clr);
+  border-bottom: 2px solid var(--accent-clr);
+  font-weight: 500;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+</style>
 {% endblock %}

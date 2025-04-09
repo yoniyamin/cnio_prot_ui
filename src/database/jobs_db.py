@@ -239,6 +239,105 @@ class JobsDB:
                 print(f"Failed to retrieve jobs for watcher {watcher_id}: {e}")
                 return []
 
+    def get_files_for_job(self, job_id):
+        """
+        Retrieve files associated with a specific job.
+        Since there's no direct file association in the database schema,
+        we'll attempt to look up the watcher_id and get files from there.
+
+        :param job_id: The ID of the job to find files for
+        :return: List of file dictionaries or an empty list
+        """
+        try:
+            # First, see if there's an associated watcher
+            watcher_id = self.get_watcher_id_for_job(job_id)
+
+            if watcher_id:
+                # We need to import WatcherDB within this method to avoid circular imports
+                from src.database.watcher_db import WatcherDB
+                watcher_db = WatcherDB()
+
+                # Get files from the watcher database
+                captured_files = watcher_db.get_captured_files(watcher_id)
+
+                # Format the file data for API response
+                file_list = []
+                for f in captured_files:
+                    # Only include files where the job_id matches or is empty
+                    if f[1] == job_id or not f[1]:
+                        file_list.append({
+                            "id": f[0],
+                            "job_id": job_id,
+                            "watcher_id": watcher_id,
+                            "file_name": f[3],
+                            "file_path": f[4],
+                            "capture_time": f[5],
+                            "status": "captured"
+                        })
+
+                return file_list
+
+            # Otherwise, check if there's any job-specific file location we can use
+            # Get the job details
+            job = self.get_job(job_id)
+
+            if job and job[6]:  # Check if local_folder exists
+                local_folder = job[6]
+                if os.path.isdir(local_folder):
+                    # List files in the job's local folder
+                    try:
+                        files = []
+                        for i, filename in enumerate(os.listdir(local_folder)):
+                            file_path = os.path.join(local_folder, filename)
+                            if os.path.isfile(file_path):
+                                files.append({
+                                    "id": i,
+                                    "job_id": job_id,
+                                    "file_name": filename,
+                                    "file_path": file_path,
+                                    "status": "local"  # These files weren't "captured" but exist locally
+                                })
+                        return files
+                    except Exception as e:
+                        print(f"Error listing files in job folder: {e}")
+                        # Continue to return empty list below
+
+            # If no files found, return empty list
+            return []
+
+        except Exception as e:
+            print(f"Error in get_files_for_job: {e}")
+            return []
+
+    def get_job_demands(self, job_id):
+        """
+        Retrieve and parse the job_demands field for a specific job.
+        This will attempt to parse the JSON string into a Python object.
+
+        :param job_id: The ID of the job
+        :return: Dict containing parsed job_demands, or None if not found/not parseable
+        """
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                cursor = conn.execute("""
+                    SELECT job_demands FROM jobs WHERE job_id = ?
+                """, (job_id,))
+                result = cursor.fetchone()
+
+                if result and result[0]:
+                    job_demands_str = result[0]
+                    try:
+                        # Try to parse as JSON
+                        import json
+                        return json.loads(job_demands_str)
+                    except json.JSONDecodeError:
+                        # Return as raw string if not valid JSON
+                        return {"raw_config": job_demands_str}
+                return None
+
+        except sqlite3.Error as e:
+            print(f"Error getting job_demands for job {job_id}: {e}")
+            return None
 
     def close(self):
         pass

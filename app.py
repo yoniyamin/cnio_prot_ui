@@ -7,6 +7,7 @@ from app_core import start_flask, init_app, app, destroy_splash_window
 from src.core.system_try import setup_tray, on_closed, on_minimize, HAS_SYSTRAY
 from src.utils import logger
 
+UI_DEBUG_MODE = True
 
 # Track if tray has already been set up
 tray_setup_complete = False
@@ -69,9 +70,12 @@ if __name__ == "__main__":
         splash, _ = init_app(setup_main_window_handlers)
         logger.info("Splash window created")
 
-        # Start the webview - this is blocking
-        logger.info("Starting webview with splash screen")
-        webview.start()
+        if UI_DEBUG_MODE:
+            logger.info("Starting webview with splash screen in debug mode")
+            webview.start(debug=True)
+        else:
+            logger.info("Starting webview with splash screen")
+            webview.start()
 
         logger.info("Webview closed")
 

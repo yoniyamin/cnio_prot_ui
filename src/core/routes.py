@@ -29,7 +29,7 @@ def maxquant():
         return render_template('maxquant.html')
 
     try:
-        # Extract form data
+        # Extract form data - General settings
         fasta_folder = request.form.get('fasta_folder')
         output_folder = request.form.get('output_folder')
         conditions_file = request.form.get('conditions_file')
@@ -37,6 +37,22 @@ def maxquant():
         mq_version = request.form.get('mq_version')
         dbs = request.form.getlist('database_choices')
         job_name = request.form.get('job_name') or f"MaxQuantJob_{int(time.time())}"
+
+        # Extract form data - Search parameters
+        protein_quantification = request.form.get('protein_quantification', 'Razor + Unique')
+        missed_cleavages = request.form.get('missed_cleavages', '2')
+        fixed_mods = request.form.get('fixed_mods', 'Carbamidomethyl (C)')
+        variable_mods = request.form.get('variable_mods', 'Oxidation (M), Acetyl (Protein N-term)')
+        enzymes = request.form.get('enzymes', 'Trypsin/P')
+        match_between_runs = request.form.get('match_between_runs') == 'on'
+        second_peptide = request.form.get('second_peptide') == 'on'
+
+        # Extract form data - Advanced parameters
+        num_threads = request.form.get('num_threads', '16')
+        id_parse_rule = request.form.get('id_parse_rule', '>.*\\|(.*)\\|')
+        desc_parse_rule = request.form.get('desc_parse_rule', '>(.*)')
+        andromeda_path = request.form.get('andromeda_path', 'C:\\Temp\\Andromeda')
+        mq_params_path = request.form.get('mq_params_path', '')
 
         # Validate inputs
         if not all([fasta_folder, output_folder, conditions_file, mq_path, dbs]):
@@ -73,7 +89,18 @@ def maxquant():
             'mq_version': mq_version,
             'dbs': dbs,
             'job_name': job_name,
-            'num_threads': 16  # Configurable via form or config if needed
+            'protein_quantification': protein_quantification,
+            'missed_cleavages': missed_cleavages,
+            'fixed_mods': fixed_mods,
+            'variable_mods': variable_mods,
+            'enzymes': enzymes,
+            'match_between_runs': match_between_runs,
+            'second_peptide': second_peptide,
+            'num_threads': num_threads,
+            'id_parse_rule': id_parse_rule,
+            'desc_parse_rule': desc_parse_rule,
+            'andromeda_path': andromeda_path,
+            'mq_params_path': mq_params_path
         }
 
         # ------------------------------------------------------------------
@@ -92,7 +119,7 @@ def maxquant():
 
         # Create the watcher
         watcher_id = watcher_db.add_watcher(**watcher_data)
-        #logger.info(f"Created watcher (ID: {watcher_id}) for {job_name}")
+        logger.info(f"Created watcher (ID: {watcher_id}) for {job_name}")
 
         # ------------------------------------------------------------------
         # Now create the Job in "waiting" status and associate it with the watcher
@@ -109,9 +136,10 @@ def maxquant():
             job_name=job_name
         )
 
-        # Store watcher_id in the job's extras_dict for in-memory reference
+        # Store all parameters in the job's extras_dict for in-memory reference
         if not hasattr(new_job, 'extras_dict'):
             new_job.extras_dict = {}
+        new_job.extras_dict = job_params.copy()  # Store all parameters in extras_dict
         new_job.extras_dict['watcher_id'] = watcher_id
 
         # Insert the new job record into jobs_db
@@ -130,8 +158,7 @@ def maxquant():
 
         # Also add it to the JobQueueManager so it's in 'waiting'
         job_queue_manager.add_job(new_job)
-        #logger.info(f"Created job (ID: {new_job.job_id}) linked to watcher {watcher_id}")
-        # ------------------------------------------------------------------
+        logger.info(f"Created job (ID: {new_job.job_id}) linked to watcher {watcher_id}")
 
         # Start watcher in the background
         watcher_manager = WatcherManager(watcher_db, job_queue_manager)
@@ -151,44 +178,6 @@ def maxquant():
     except Exception as e:
         logger.error(f"Error setting up MaxQuant watcher: {str(e)}", exc_info=True)
         return f"Error: {str(e)}", 500
-
-
-
-def launch_maxquant_job(mq_version, mq_path, conditions_file, dbs, output_folder, job_name):
-    """Launch a MaxQuant job in a separate thread"""
-    logger.info(f"Launching MaxQuant job '{job_name}'")
-    logger.info(f"  Version: {mq_version}")
-    logger.info(f"  Executable: {mq_path}")
-    logger.info(f"  Conditions file: {conditions_file}")
-    logger.info(f"  Databases: {dbs}")
-    logger.info(f"  Output folder: {output_folder}")
-
-    try:
-        # Update status file to show job is running
-        job_dir = os.path.join(app.config['UPLOAD_FOLDER'], job_name)
-        ensure_directory_exists(job_dir)
-
-        with open(os.path.join(job_dir, "status.txt"), "w") as f:
-            f.write("running")
-        logger.info(f"MaxQuant job {job_name} status: running")
-
-        # Here you'd create MaxQuant_handler(...).run_MaxQuant_cli()
-        # For now it's just a placeholder
-        import time
-        time.sleep(5)  # Simulate a job running
-
-        # Update status file to show job is complete
-        with open(os.path.join(job_dir, "status.txt"), "w") as f:
-            f.write("complete")
-        logger.info(f"MaxQuant job {job_name} status: complete")
-
-    except Exception as e:
-        logger.error(f"Error in MaxQuant job {job_name}: {str(e)}", exc_info=True)
-
-        # Update status file to show job failed
-        with open(os.path.join(job_dir, "status.txt"), "w") as f:
-            f.write(f"failed: {str(e)}")
-        logger.error(f"MaxQuant job {job_name} status: failed")
 
 
 @app.route('/diann', methods=['GET', 'POST'])

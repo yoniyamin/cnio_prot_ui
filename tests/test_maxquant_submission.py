@@ -1,40 +1,93 @@
-# tests/test_maxquant_submission.py
-
 import os
+import time
 import pytest
-from flask import Flask
-from src.core.routes import app  # your Flask app that has /maxquant route
-from src.database.jobs_db import JobsDB
+from app_core import app, watcher_db, jobs_db, job_queue_manager
+from src.core.file_utils import ensure_directory_exists
 
 @pytest.fixture
 def client():
-    # This sets up your Flask test client
+    app.config['TESTING'] = True
     with app.test_client() as client:
         yield client
 
-def test_maxquant_job_submission(client):
-    # We'll simulate an HTTP POST to /maxquant, passing form data
-    response = client.post('/maxquant', data={
-        'fasta_folder': '/path/to/fasta',
-        'output_folder': '/path/to/output',
-        'conditions_file': '/path/to/conditions.txt',
-        'mq_path': '/path/to/MaxQuantCmd.exe',
-        'mq_version': '2.4.0.0',
-        'database_choices': 'human',  # or request.form.getlist scenario
-        'job_name': 'Test_MaxQuant_Job'
-    })
+@pytest.fixture
+def test_data_dir(tmp_path):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    conditions_file = input_dir / "conditions.tsv"
+    with open(conditions_file, 'w') as f:
+        f.write("Raw file\tExperiment\nfile1.raw\tExp1\nfile2.raw\tExp1\n")
+    return input_dir
 
-    # Check response
+def test_maxquant_submission_simulated(client, test_data_dir):
+    # Prepare test data
+    fasta_folder = str(test_data_dir)
+    output_folder = str(test_data_dir / "output")
+    conditions_file = str(test_data_dir / "conditions.tsv")
+    mq_path = "C:/fake/path/MaxQuantCmd.exe"  # Simulated path
+    ensure_directory_exists(output_folder)
+
+    # Submit simulated MaxQuant job
+    response = client.post(
+        '/maxquant?simulate=true',
+        data={
+            'fasta_folder': fasta_folder,
+            'output_folder': output_folder,
+            'conditions_file': conditions_file,
+            'mq_path': mq_path,
+            'mq_version': '2.1.4.0',
+            'database_choices': ['HUMAN'],
+            'job_name': 'TestSimMaxQuant'
+        }
+    )
+
     assert response.status_code == 200
-    resp_text = response.get_data(as_text=True)
-    assert "A watcher (ID:" in resp_text  # or similar text that indicates success
+    assert b"Job Submitted Successfully" in response.data
 
-    # Optionally check the DB
-    jobs_db = JobsDB(db_path="config/jobs.db")
-    # fetch recently added job by name, e.g.:
-    job = jobs_db.get_job_by_name("Test_MaxQuant_Job")
-    assert job is not None
-    assert job['job_type'] == 'maxquant'
+    # Check watcher creation
+    watchers = watcher_db.get_watchers()
+    assert len(watchers) > 0
+    watcher_id = watchers[0][0]
 
-    # If you want to check that it used simulation:
-    #  - you can add a param & route condition, or read logs, etc.
+    # Check job creation
+    jobs = jobs_db.get_jobs_by_watcher_id(watcher_id)
+    assert len(jobs) == 1
+    assert jobs[0]['job_name'] == 'TestSimMaxQuant'
+    assert jobs[0]['status'] in ['waiting', 'running', 'completed']
+
+    # Wait for simulation to complete (adjust timing as needed)
+    time.sleep(10)  # Simulation takes ~10 seconds
+    job_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'TestSimMaxQuant')
+    with open(os.path.join(job_dir, "status.txt")) as f:
+        status = f.read()
+    assert status == "complete"
+
+def test_maxquant_submission_stop(client, test_data_dir):
+    # Submit simulated job
+    response = client.post(
+        '/maxquant?simulate=true',
+        data={
+            'fasta_folder': str(test_data_dir),
+            'output_folder': str(test_data_dir / "output"),
+            'conditions_file': str(test_data_dir / "conditions.tsv"),
+            'mq_path': "C:/fake/path/MaxQuantCmd.exe",
+            'mq_version': '2.1.4.0',
+            'database_choices': ['HUMAN'],
+            'job_name': 'TestStopMaxQuant'
+        }
+    )
+
+    assert response.status_code == 200
+
+    # Get job ID
+    jobs = jobs_db.get_all_jobs()
+    job_id = next(job['job_id'] for job in jobs if job['job_name'] == 'TestStopMaxQuant')
+
+    # Stop the job
+    response = client.post(f'/api/jobs/{job_id}/stop')
+    assert response.status_code == 200
+    assert b"Job TestStopMaxQuant cancelled" in response.data
+
+    # Verify status
+    updated_job = jobs_db.get_job(job_id)
+    assert updated_job['status'] == 'cancelled'

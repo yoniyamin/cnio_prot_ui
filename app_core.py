@@ -208,7 +208,8 @@ def create_main_window():
         frameless=False,
         hidden=True,  # Start hidden
         js_api=api,  # Your JS API, if used
-        shadow=True
+        shadow=True,
+        confirm_close=True
     )
 
     # Define what happens when main window is loaded

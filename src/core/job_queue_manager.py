@@ -7,7 +7,7 @@ from pathlib import Path
 import time
 from src.core.job import Job # not needed at that point, but maybe in the future.
 from src.database.watcher_db import WatcherDB
-from src.handlers.run_maxquant import MaxQuant_handler
+from src.handlers.run_maxquant import MaxQuantHandler
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -74,7 +74,7 @@ class JobQueueManager:
             jobs_db.update_files_status(job.job_id, True)
 
     def run_job(self, job):
-        self.logger.info(f"Running job {job.job_id}")
+        logger.info(f"Running job {job.job_id}")
         with self.lock:
             job.change_job_status('running')
             self.remove_job_from_set(job, self.queued_jobs, self.queued_jobs_lock)
@@ -87,7 +87,7 @@ class JobQueueManager:
                 job.progress_queue = ThreadQueue()
                 job.stop_queue = ThreadQueue()
 
-                handler = MaxQuant_handler(
+                handler = MaxQuantHandler(
                     stop_queue=job.stop_queue,
                     progress_queue=job.progress_queue,
                     MQ_version=params['mq_version'],
@@ -97,6 +97,17 @@ class JobQueueManager:
                     output_folder=params['output_folder'],
                     conditions=params['conditions_file'],
                     dbs=params['dbs'],
+                    protein_quantification=params.get('protein_quantification', 'Razor + Unique'),
+                    missed_cleavages=params.get('missed_cleavages', '2'),
+                    fixed_mods=params.get('fixed_mods', 'Carbamidomethyl (C)'),
+                    variable_mods=params.get('variable_mods', 'Oxidation (M), Acetyl (Protein N-term)'),
+                    enzymes=params.get('enzymes', 'Trypsin/P'),
+                    match_between_runs=params.get('match_between_runs', False),
+                    second_peptide=params.get('second_peptide', False),
+                    id_parse_rule=params.get('id_parse_rule', '>.*\\|(.*)\\|'),
+                    desc_parse_rule=params.get('desc_parse_rule', '>(*)'),
+                    andromeda_path=params.get('andromeda_path', 'C:\\Temp\\Andromeda'),
+                    mq_params_path=params.get('mq_params_path', ''),
                     user_input_params=False,
                     raw_folder=os.path.join(params['output_folder'], "raw_file_folder"),
                     job_name=job.job_name,
@@ -121,7 +132,7 @@ class JobQueueManager:
                                 progress = float(message)
                                 job.update_progress(progress / 100)  # Assuming progress is 0-100
                             except ValueError:
-                                self.logger.debug(f"Progress message: {message}")
+                                logger.debug(f"Progress message: {message}")
                     except Empty:
                         continue
 
@@ -129,11 +140,11 @@ class JobQueueManager:
                 if job.status not in ['completed', 'errored']:
                     job.change_job_status('completed')
             else:
-                self.logger.error(f"Unknown job type: {job.job_type}")
+                logger.error(f"Unknown job type: {job.job_type}")
                 raise ValueError(f"Unknown job type: {job.job_type}")
 
         except Exception as e:
-            self.logger.error(f"Job {job.job_id} failed: {e}")
+            logger.error(f"Job {job.job_id} failed: {e}")
             job.change_job_status('errored')
 
         with self.lock:

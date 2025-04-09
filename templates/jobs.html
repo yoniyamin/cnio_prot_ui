@@ -101,7 +101,137 @@ window.jobsData = {{ jobs | tojson }};
     </div>
   </div>
 </div>
+<!-- Job Details Modal -->
+<div id="job-details-modal" class="modal">
+  <div class="modal-overlay"></div>
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3>Job Details</h3>
+      <button id="close-job-details-modal" class="modal-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
 
+    <div class="modal-body">
+      <div id="job-details-content">
+        <div class="loading-message">
+          <div class="loading-spinner"></div>
+          <span>Loading job details...</span>
+        </div>
+      </div>
+
+      <div id="job-details-error" class="error-message" style="display: none;">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>Failed to load job details.</span>
+      </div>
+
+      <div id="job-details-container" style="display: none;">
+        <!-- Tabs navigation -->
+        <div class="tabs-container">
+          <div class="tabs-nav">
+            <button class="tab-button active" data-tab="basic-info">Basic Information</button>
+            <button class="tab-button" data-tab="parameters">Parameters</button>
+            <button class="tab-button" data-tab="files">Files</button>
+          </div>
+
+          <!-- Tab content -->
+          <div class="tab-content" id="basic-info-tab">
+            <table class="details-table">
+              <tbody>
+                <tr>
+                  <th>Job ID</th>
+                  <td id="job-id"></td>
+                </tr>
+                <tr>
+                  <th>Job Name</th>
+                  <td id="job-name"></td>
+                </tr>
+                <tr>
+                  <th>Status</th>
+                  <td id="job-status"></td>
+                </tr>
+                <tr>
+                  <th>Type</th>
+                  <td id="job-type"></td>
+                </tr>
+                <tr>
+                  <th>Progress</th>
+                  <td id="job-progress"></td>
+                </tr>
+                <tr>
+                  <th>Created</th>
+                  <td id="job-created"></td>
+                </tr>
+                <tr>
+                  <th>Started</th>
+                  <td id="job-started"></td>
+                </tr>
+                <tr>
+                  <th>Completed</th>
+                  <td id="job-completed"></td>
+                </tr>
+                <tr>
+                  <th>Watcher ID</th>
+                  <td id="job-watcher-id"></td>
+                </tr>
+                <tr>
+                  <th>Demands</th>
+                  <td id="job-demands"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tab-content" id="parameters-tab" style="display: none;">
+            <div id="job-parameters">
+              <div class="loading-message small">
+                <div class="loading-spinner"></div>
+                <span>Loading parameters...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="files-tab" style="display: none;">
+            <div class="files-container">
+              <div class="files-header">
+                <h4>Associated Files</h4>
+                <button class="action-button secondary refresh-files">
+                  <i class="fas fa-sync-alt"></i>
+                  Refresh
+                </button>
+              </div>
+              <div class="table-container">
+                <table class="data-table files-table">
+                  <thead>
+                    <tr>
+                        <th data-sort="status">Status</th>
+                        <th data-sort="file_name">File Name</th>
+                        <th data-sort="file_path">File Path</th>
+                    </tr>
+                  </thead>
+                  <tbody id="job-files-tbody">
+                    <tr>
+                      <td colspan="4" class="loading-message">
+                        <div class="loading-spinner"></div>
+                        <span>Loading files...</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="action-button secondary" id="close-job-details-btn">Close</button>
+      <button class="action-button danger" id="stop-job-btn" style="display: none;">Stop Job</button>
+    </div>
+  </div>
+</div>
+</div>
 <script>
 // Enhanced script for highlighting jobs
 document.addEventListener('DOMContentLoaded', () => {
@@ -155,6 +285,8 @@ if (typeof window.highlightSelectedJob === 'function') {
     }
   });
 }
+
+
 </script>
 
 {% endblock %}
