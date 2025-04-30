@@ -7,7 +7,7 @@ from app_core import start_flask, init_app, app, destroy_splash_window
 from src.core.system_try import setup_tray, on_closed, on_minimize, HAS_SYSTRAY
 from src.utils import logger
 
-UI_DEBUG_MODE = True
+UI_DEBUG_MODE = False
 
 # Track if tray has already been set up
 tray_setup_complete = False

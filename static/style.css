@@ -252,7 +252,7 @@ main p{
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 1.5rem;
+  gap: 2.5rem;
   justify-items: center;
 }
 
@@ -288,16 +288,15 @@ html:not(.light-mode) .tile-icon {
 
 }
 
-.cnio-logo {
-  max-height: 80px;
+.cnio-logo { display: none; max-height: 80px; }
+
+html:not(.light-mode) .logo‑white {
+  display: inline-block;
 }
 
-html:not(.light-mode) .invert-on-dark {
-  filter: brightness(0) invert(1);
-}
-
-html.light-mode .invert-on-dark {
-  filter: none;
+/* when in light‑mode show the dark‑text one */
+html.light-mode .logo‑dark {
+  display: inline-block;
 }
 
 .intro-section p {
@@ -637,3 +636,38 @@ button:focus {
   outline-offset: 2px;
 }
 
+/* Global Tabs */
+.tab-navigation {
+  display: flex;
+  border-bottom: 1px solid var(--line-clr);
+  margin-bottom: 1.5rem;
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  padding: 0.75em 1.5em;
+  margin-right: 0.5em;
+  cursor: pointer;
+  color: var(--text-clr);
+  border-radius: 0.5em 0.5em 0 0;
+  transition: background-color 0.2s ease;
+}
+
+.tab-button:hover {
+  background-color: var(--hover-clr);
+}
+
+.tab-button.active {
+  background-color: var(--hover-clr);
+  border-bottom: 2px solid var(--accent-clr);
+  font-weight: 500;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}

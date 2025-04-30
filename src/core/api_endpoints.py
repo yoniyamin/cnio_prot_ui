@@ -44,6 +44,43 @@ def api_logs():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/watchers/<int:watcher_id>/rescan', methods=['POST'])
+def api_force_watcher_rescan(watcher_id):
+    """Force a watcher to rescan its folder for existing files"""
+    try:
+        logger.info(f"API request: force rescan for watcher {watcher_id}")
+        
+        # First check if the watcher exists and is active
+        watcher_info = next((w for w in watcher_db.get_watchers() if w[0] == watcher_id), None)
+        if not watcher_info:
+            return jsonify({"error": f"Watcher {watcher_id} not found"}), 404
+            
+        # Check if watcher is monitoring
+        if watcher_info[8] != 'monitoring':
+            return jsonify({"error": f"Watcher {watcher_id} is not in monitoring state (current state: {watcher_info[8]})"}), 400
+        
+        # Create a temporary watcher instance to force rescan
+        try:
+            # Import here to avoid circular imports
+            from src.watchers.watcher_manager import WatcherManager
+            watcher_manager = WatcherManager(watcher_db, job_queue_manager)
+            watcher = watcher_manager.create_single_watcher(watcher_id)
+            
+            # Force a rescan of existing files
+            watcher.force_rescan()
+            logger.info(f"Forced rescan for watcher {watcher_id}")
+            
+            return jsonify({"success": True, "message": f"Forced rescan for watcher {watcher_id}"})
+        except Exception as e:
+            logger.error(f"Error forcing rescan: {str(e)}", exc_info=True)
+            return jsonify({"error": f"Error forcing rescan: {str(e)}"}), 500
+
+    except Exception as e:
+        logger.error(f"Error in force rescan endpoint: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+
 @app.route('/api/download-log')
 def api_download_log():
     try:

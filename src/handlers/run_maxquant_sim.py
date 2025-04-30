@@ -1,121 +1,188 @@
-"""Simulated MaxQuant handler for testing frontend integration"""
-
+import os
 import time
-from queue import Queue as ThreadQueue, Empty
 import threading
+import json
+from queue import Queue, Empty
 from pathlib import Path
 
 class MaxQuantSimHandler:
-    def __init__(self, stop_queue, progress_queue,
-                 MQ_version, MQ_path, db_map,
-                 fasta_folder, output_folder, conditions, dbs, user_input_params,
-                 raw_folder=None, job_name=None,
-                 prot_quantification="Razor + Unique", num_missed_cleavages=2,
-                 id_parse_rule=r">.*\|(.*)\|", desc_parse_rule=r">(.*)", andromeda_path=r"C:\Temp\Andromeda",
-                 fixed_mods=["Carbamidomethyl (C)"], enzymes=["Trypsin/P"], use_enzyme_first_search_str="True",
-                 fs_enzymes=["Trypsin/P"], var_mods=["Oxidation (M)", "Acetyl (Protein N-term)"],
-                 second_peptide_str="False", match_between_runs="False", num_threads=16,
-                 MQ_params=None,
-                 run_mode="interactive"):
-        self.stop_queue = stop_queue
-        self.progress_queue = progress_queue
-        self.MQ_version = MQ_version
-        self.MQ_path = MQ_path
-        self.db_map = db_map
+    def __init__(
+            self,
+            conditions,
+            fasta_folder,
+            output_folder,
+            dbs,
+            progress_callback=None,
+            mq_version="2.1.4.0",
+            protein_quantification="Razor + Unique",
+            missed_cleavages="2",
+            fixed_mods="Carbamidomethyl (C)",
+            variable_mods="Oxidation (M), Acetyl (Protein N-term)",
+            enzymes="Trypsin/P",
+            match_between_runs=False,
+            second_peptide=False,
+            num_threads="16",
+            id_parse_rule=">.*\\|(.*)\\|",
+            desc_parse_rule=">(.*)",
+            andromeda_path="C:\\Temp\\Andromeda",
+            mq_params_path="",
+            **kwargs
+    ):
+        # Initialize parameters
+        self.conditions = conditions
         self.fasta_folder = fasta_folder
         self.output_folder = output_folder
-        self.conditions = conditions
         self.dbs = dbs
-        self.user_input_params = user_input_params
-        self.raw_folder = raw_folder
-        self.job_name = job_name or str(Path(output_folder).name)
-        self.prot_quantification = prot_quantification
-        self.num_missed_cleavages = num_missed_cleavages
+        self.mq_version = mq_version
+        self.progress_callback = progress_callback
+        self.protein_quantification = protein_quantification
+        self.missed_cleavages = missed_cleavages
+        self.fixed_mods = fixed_mods
+        self.variable_mods = variable_mods
+        self.enzymes = enzymes
+        self.match_between_runs = match_between_runs
+        self.second_peptide = second_peptide
+        self.num_threads = num_threads
         self.id_parse_rule = id_parse_rule
         self.desc_parse_rule = desc_parse_rule
         self.andromeda_path = andromeda_path
-        self.fixed_mods = fixed_mods
-        self.enzymes = enzymes
-        self.use_enzyme_first_search_str = use_enzyme_first_search_str
-        self.fs_enzymes = fs_enzymes
-        self.var_mods = var_mods
-        self.second_peptide_str = second_peptide_str
-        self.match_between_runs = match_between_runs
-        self.num_threads = num_threads
-        self.MQ_params = MQ_params
-        self.run_mode = run_mode
+        self.mq_params_path = mq_params_path
+        
+        # Store any additional kwargs
+        self.kwargs = kwargs
+        
+        # Set up simulation variables
         self.stop_requested = False
-        self.progress_queue.put("Initializing simulated MaxQuant handler")
+        self.steps_completed = 0
+        self.total_steps = 5
 
-    def check_stop_queue(self):
-        if not self.stop_queue.empty():
-            message = self.stop_queue.get()
-            if message.startswith("STOP"):
-                self.stop_requested = True
-                self.progress_queue.put("UPDATE: Stop requested")
+    def log_progress(self, message):
+        """Log progress message to callback or console"""
+        if self.progress_callback:
+            self.progress_callback(message)
+        print(message)
 
-    def concatenate_fasta_files(self):
-        self.progress_queue.put("STARTING: Simulating concatenation of input and database fasta.")
-        time.sleep(2)  # Simulate processing time
-        self.check_stop_queue()
-        if not self.stop_requested:
-            self.progress_queue.put("STEP COMPLETED: Simulated file concatenation.")
-
-    def create_MaxQuant_par(self):
-        self.progress_queue.put(f"STARTING: Simulating creation of template MaxQuant params file (v{self.MQ_version}).")
-        time.sleep(1)
-        self.check_stop_queue()
-        if not self.stop_requested:
-            self.progress_queue.put("STEP COMPLETED: Simulated creation of template MaxQuant params file.")
-
-    def edit_MQ_par(self):
-        self.progress_queue.put("STARTING: Simulating editing of MaxQuant params file.")
-        time.sleep(1.5)
-        self.check_stop_queue()
-        if not self.stop_requested:
-            self.progress_queue.put("STEP COMPLETED: Simulated editing of MaxQuant params file.")
-
-    def run_MaxQuant(self):
-        self.progress_queue.put(f"STARTING: Simulating MaxQuant version {self.MQ_version}.")
-        for i in range(5):  # Simulate a longer process with multiple updates
-            self.check_stop_queue()
-            if self.stop_requested:
-                self.progress_queue.put("UPDATE: Terminating simulated MaxQuant process")
-                break
-            self.progress_queue.put(f"UPDATE: Simulated MaxQuant progress {i+1}/5")
-            time.sleep(1)
-        if not self.stop_requested:
-            self.progress_queue.put(f"STEP COMPLETED: Simulated MaxQuant version {self.MQ_version}.")
-
-    def run_MaxQuant_cli(self):
-        self.progress_queue.put("STARTING: Simulated MaxQuant process")
-        self.concatenate_fasta_files()
-        if self.stop_requested:
-            return
-        self.create_MaxQuant_par()
-        if self.stop_requested:
-            return
-        self.edit_MQ_par()
-        if self.stop_requested:
-            return
-        self.run_MaxQuant()
-        if not self.stop_requested:
-            self.progress_queue.put("PROCESS COMPLETED: Simulated MaxQuant completed.")
-
-def launch_maxquant_sim_job(params, progress_callback):
-    stop_queue = ThreadQueue()
-    progress_queue = ThreadQueue()
-    handler = MaxQuantSimHandler(
-        stop_queue=stop_queue,
-        progress_queue=progress_queue,
-        **params
-    )
-    thread = threading.Thread(target=handler.run_MaxQuant_cli)
-    thread.start()
-    while thread.is_alive():
+    def check_stop_signal(self, stop_queue):
+        """Check if stop was requested via queue"""
         try:
-            message = progress_queue.get(timeout=1)
-            progress_callback(message)
+            message = stop_queue.get(block=False)
+            if message == "STOP":
+                self.stop_requested = True
+                self.log_progress("PROCESS CANCELLED: MaxQuant simulation cancelled.")
+                return True
         except Empty:
-            continue
-    thread.join()
+            pass
+        
+        return False
+
+    def run_simulation(self, stop_queue, progress_queue=None):
+        """Run a simulated MaxQuant job"""
+        try:
+            self.log_progress("STARTING PROCESS: MaxQuant simulation")
+            
+            # Step 1: Configuration
+            self.log_progress("UPDATE: Simulated MaxQuant progress 1/5 - Preparing configuration")
+            time.sleep(3)
+            if self.check_stop_signal(stop_queue):
+                return False
+            self.steps_completed += 1
+            
+            # Step 2: Data loading
+            self.log_progress("UPDATE: Simulated MaxQuant progress 2/5 - Loading raw files")
+            # Pretend to load data from conditions file
+            time.sleep(3)
+            if self.check_stop_signal(stop_queue):
+                return False
+            self.steps_completed += 1
+            
+            # Step 3: First search
+            self.log_progress("UPDATE: Simulated MaxQuant progress 3/5 - First search")
+            time.sleep(3)
+            if self.check_stop_signal(stop_queue):
+                return False
+            self.steps_completed += 1
+            
+            # Step 4: Main search
+            self.log_progress("UPDATE: Simulated MaxQuant progress 4/5 - Main search")
+            time.sleep(3)
+            if self.check_stop_signal(stop_queue):
+                return False
+            self.steps_completed += 1
+            
+            # Step 5: Post-processing and finishing
+            self.log_progress("UPDATE: Simulated MaxQuant progress 5/5 - Post-processing")
+            time.sleep(3)
+            if self.check_stop_signal(stop_queue):
+                return False
+            self.steps_completed += 1
+            
+            # Complete
+            self.log_progress("PROCESS COMPLETED: Simulated MaxQuant job finished successfully")
+            return True
+            
+        except Exception as e:
+            self.log_progress(f"ERROR: Exception in MaxQuant simulation: {str(e)}")
+            return False
+
+def launch_maxquant_sim_job(job_params, progress_callback=None, stop_queue=None, progress_queue=None):
+    """Launch a simulated MaxQuant job"""
+    try:
+        # Default queues if not provided
+        if stop_queue is None:
+            stop_queue = Queue()
+        if progress_queue is None:
+            progress_queue = Queue()
+            
+        # Map expected parameters between job_params and MaxQuantSimHandler
+        # Extract required parameters
+        params = {
+            'conditions': job_params.get('conditions'),  # This is 'conditions_file' in job_params
+            'fasta_folder': job_params.get('fasta_folder'),
+            'output_folder': job_params.get('output_folder'),
+            'dbs': job_params.get('dbs', ['HUMAN']),
+            'mq_version': job_params.get('mq_version', '2.1.4.0'),
+            'protein_quantification': job_params.get('protein_quantification', 'Razor + Unique'),
+            'missed_cleavages': job_params.get('missed_cleavages', '2'),
+            'fixed_mods': job_params.get('fixed_mods', 'Carbamidomethyl (C)'),
+            'variable_mods': job_params.get('variable_mods', 'Oxidation (M), Acetyl (Protein N-term)'),
+            'enzymes': job_params.get('enzymes', 'Trypsin/P'),
+            'match_between_runs': job_params.get('match_between_runs', False),
+            'second_peptide': job_params.get('second_peptide', False),
+            'num_threads': job_params.get('num_threads', '16'),
+            'id_parse_rule': job_params.get('id_parse_rule', '>.*\\|(.*)\\|'),
+            'desc_parse_rule': job_params.get('desc_parse_rule', '>(.*)')
+        }
+        
+        # Handle optional parameters if present
+        if 'andromeda_path' in job_params:
+            params['andromeda_path'] = job_params['andromeda_path']
+        if 'mq_params_path' in job_params:
+            params['mq_params_path'] = job_params['mq_params_path']
+            
+        # Initial progress update
+        if progress_callback:
+            progress_callback("Starting simulated MaxQuant job")
+        
+        # Create handler with adjusted parameters
+        handler = MaxQuantSimHandler(
+            progress_callback=progress_callback,
+            **params
+        )
+        
+        # Run the simulation
+        result = handler.run_simulation(stop_queue, progress_queue)
+        
+        # Final update
+        if progress_callback:
+            if result:
+                progress_callback("Simulated MaxQuant job completed successfully")
+            else:
+                progress_callback("Simulated MaxQuant job failed or was cancelled")
+                
+        return result
+        
+    except Exception as e:
+        if progress_callback:
+            progress_callback(f"ERROR: Failed to launch MaxQuant simulation: {str(e)}")
+        print(f"ERROR: Failed to launch MaxQuant simulation: {str(e)}")
+        return False

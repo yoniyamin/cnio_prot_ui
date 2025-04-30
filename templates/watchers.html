@@ -189,6 +189,10 @@
         <div class="details-header">
           <h4>Captured Files</h4>
           <div class="details-actions">
+            <button class="action-button secondary rescan-folder">
+              <i class="fas fa-search"></i>
+              Rescan Folder
+            </button>
             <button class="action-button secondary refresh-files">
               <i class="fas fa-sync-alt"></i>
               Refresh
@@ -220,3 +224,22 @@
   </tr>
 </template>
 {% endblock %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // We use event delegation since the buttons are added dynamically
+  document.body.addEventListener('click', (e) => {
+    // Handle the new rescan folder button
+    if (e.target.closest('.rescan-folder')) {
+      const detailsRow = e.target.closest('.watcher-details-row');
+      if (detailsRow) {
+        const watcherId = detailsRow.dataset.watcherId;
+        if (watcherId && window.forceWatcherRescan) {
+          // Call the rescan function we added to watchers.js
+          window.forceWatcherRescan(watcherId);
+        }
+      }
+    }
+  });
+});
+</script>

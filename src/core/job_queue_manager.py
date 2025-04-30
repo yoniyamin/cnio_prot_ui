@@ -71,7 +71,11 @@ class JobQueueManager:
             # Update status in the database too
             from src.database.jobs_db import JobsDB
             jobs_db = JobsDB()
-            jobs_db.update_files_status(job.job_id, True)
+            jobs_db.update_job_status(job.job_id, 'queued')  # Update status
+            jobs_db.update_files_status(job.job_id, True)  # Mark files as ready
+
+            # Put the job back in the queue to ensure it gets processed
+            self.job_queue.put(job)
 
     def run_job(self, job):
         logger.info(f"Running job {job.job_id}")
@@ -136,6 +140,108 @@ class JobQueueManager:
                     except Empty:
                         continue
 
+                handler_thread.join()
+                if job.status not in ['completed', 'errored']:
+                    job.change_job_status('completed')
+            elif job.job_type == 'diann':
+                params = job.extras_dict
+                # Add progress and stop queues to the job
+                job.progress_queue = ThreadQueue()
+                job.stop_queue = ThreadQueue()
+                
+                from src.handlers.diann_handler import DIANNHandler
+                
+                # Define progress callback
+                def progress_callback(message):
+                    job.progress_queue.put(message)
+
+                    # Update job status based on message
+                    if message.startswith("ERROR"):
+                        job.change_job_status('errored')
+                        job.error_flag = True
+                        # Update database status
+                        from src.database.jobs_db import JobsDB
+                        jobs_db = JobsDB()
+                        jobs_db.update_job_status(job.job_id, 'errored')
+                    elif "PROCESS COMPLETED" in message:
+                        job.change_job_status('completed')
+                        # Update database status
+                        from src.database.jobs_db import JobsDB
+                        jobs_db = JobsDB()
+                        jobs_db.update_job_status(job.job_id, 'completed')
+                    elif message.startswith("STARTING"):
+                        job.change_job_status('running')
+                        # Update database status
+                        from src.database.jobs_db import JobsDB
+                        jobs_db = JobsDB()
+                        jobs_db.update_job_status(job.job_id, 'running')
+
+                    # Try to parse progress from the message
+                    try:
+                        # Find progress percentages in various formats
+                        if "%" in message:
+                            percent_str = message.split("%")[0].split()[-1]
+                            progress = float(percent_str) / 100.0
+                            job.update_progress(progress)
+
+                            # Update progress in database
+                            from src.database.jobs_db import JobsDB
+                            jobs_db = JobsDB()
+                            jobs_db.update_job_progress(job.job_id, progress)
+                        elif "STEP COMPLETED" in message:
+                            # Increase progress by a small amount for each completed step
+                            current_progress = job.progress
+                            # Make sure we don't exceed 1.0
+                            new_progress = min(current_progress + 0.1, 0.95)
+                            job.update_progress(new_progress - current_progress)
+
+                            # Update progress in database
+                            from src.database.jobs_db import JobsDB
+                            jobs_db = JobsDB()
+                            jobs_db.update_job_progress(job.job_id, job.progress)
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"Could not parse progress from message: {message} - {str(e)}")
+                
+                # Create the handler
+                handler = DIANNHandler(
+                    diann_exe=params['diann_path'],
+                    fasta=params['fasta_file'],
+                    conditions=params['conditions_file'],
+                    op_folder=params['output_folder'],
+                    msconvert_path=params.get('msconvert_path'),
+                    progress_callback=progress_callback,
+                    max_missed_cleavage=params.get('missed_cleavage', '1'),
+                    max_var_mods=params.get('max_var_mods', '2'),
+                    NtermMex_mod=params.get('mod_nterm_m_excision', True),
+                    CCarb_mod=params.get('mod_c_carb', True),
+                    OxM_mod=params.get('mod_ox_m', True),
+                    AcNterm_mod=params.get('mod_ac_nterm', False),
+                    Phospho_mod=params.get('mod_phospho', False),
+                    KGG_mod=params.get('mod_k_gg', False),
+                    peptide_length_range_min=params.get('peptide_length_min', '7'),
+                    peptide_length_range_max=params.get('peptide_length_max', '30'),
+                    precursor_charge_range_min=params.get('precursor_charge_min', '2'),
+                    precursor_charge_range_max=params.get('precursor_charge_max', '4'),
+                    precursor_min=params.get('precursor_min', '390'),
+                    precursor_max=params.get('precursor_max', '1050'),
+                    fragment_min=params.get('fragment_min', '200'),
+                    fragment_max=params.get('fragment_max', '1800'),
+                    threads=params.get('threads', '20'),
+                    MBR=params.get('mbr', False)
+                )
+                
+                # Run handler in a separate thread
+                handler_thread = threading.Thread(target=handler.run_workflow)
+                handler_thread.start()
+                
+                # Monitor progress and stop signals
+                while handler_thread.is_alive():
+                    try:
+                        message = job.progress_queue.get(timeout=1)
+                        logger.debug(f"DIA-NN job {job.job_id} message: {message}")
+                    except Empty:
+                        continue
+                
                 handler_thread.join()
                 if job.status not in ['completed', 'errored']:
                     job.change_job_status('completed')

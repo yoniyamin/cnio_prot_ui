@@ -39,10 +39,12 @@ class WatcherDB:
                     completion_time DATETIME
                 )
             """)
+            
+            # Modified the captured_files table to allow NULL in job_id
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS captured_files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id TEXT NOT NULL,
+                    job_id TEXT,
                     watcher_id INTEGER NOT NULL,
                     file_name TEXT NOT NULL,
                     file_path TEXT NOT NULL,
@@ -83,6 +85,20 @@ class WatcherDB:
             except sqlite3.Error as e:
                 print(f"Failed to add captured file: {e}")
                 raise
+                
+    def update_captured_file_job_id(self, file_path, job_id):
+        """Update the job_id for a captured file."""
+        with sqlite3.connect(str(self.db_path)) as conn:
+            try:
+                conn.execute("""
+                    UPDATE captured_files SET job_id = ? WHERE file_path = ?
+                """, (job_id, file_path))
+                conn.commit()
+                logger.info(f"Updated job_id to {job_id} for file {file_path}")
+                return True
+            except sqlite3.Error as e:
+                logger.error(f"Failed to update job_id for file: {e}")
+                return False
 
     def get_watchers(self, status=None):
         """Retrieve watcher configurations, optionally filtered by status."""

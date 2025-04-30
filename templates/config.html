@@ -1,5 +1,91 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Configuration</h2>
-<p>This is the Configuration page content.</p>
+<style>
+  .config-container { display:flex; height:100%; }
+  .config-sidebar { width:200px; border-right:1px solid var(--line-clr); }
+  .config-sidebar ul { list-style:none; padding:1rem 0; margin:0; }
+  .config-sidebar li { padding:0.75rem 1rem; }
+  .config-sidebar li a { color: var(--text-clr); text-decoration:none; display:block; }
+  .config-sidebar li.active a { color: var(--accent-clr); }
+  .config-main { flex:1; padding:1rem; overflow:auto; }
+  .config-section { display:none; }
+  .config-section.active { display:block; }
+</style>
+<div class="config-container">
+  <aside class="config-sidebar">
+    <ul>
+      <li class="active"><a href="#" data-section="general">General</a></li>
+      <li><a href="#" data-section="testing">Testing</a></li>
+    </ul>
+  </aside>
+  <main class="config-main">
+    <section id="general" class="config-section active">
+      <h3>General Settings</h3>
+      <p>Configure general application preferences here.</p>
+    </section>
+    <section id="testing" class="config-section">
+      <h3>Testing Settings</h3>
+      <div class="section-container">
+        <div class="section-header">
+          <h3>Submit a Test Job</h3>
+          <p class="subtitle">This form allows you to test job submission and monitor job progress without running actual processing.</p>
+        </div>
+        <form id="test-job-form" method="POST" action="{{ url_for('test_job_submission') }}">
+          <div class="input-row">
+            <label for="job_type">Job Type:</label>
+            <select id="job_type" name="job_type" required>
+              <option value="">Select a job type</option>
+              <option value="maxquant">MaxQuant</option>
+              <option value="diann">DIA-NN</option>
+            </select>
+          </div>
+          <div class="input-row">
+            <label for="job_name">Job Name:</label>
+            <input type="text" id="job_name" name="job_name" placeholder="Test job name (optional)">
+            <div class="helper-text">If left blank, a name will be generated automatically.</div>
+          </div>
+          <div class="input-row">
+            <div class="checkbox-item">
+              <input type="checkbox" id="simulate_error" name="simulate_error">
+              <label for="simulate_error">Simulate error during execution</label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="action-button primary">Submit Test Job</button>
+            <button type="reset" class="action-button secondary">Reset Form</button>
+          </div>
+        </form>
+      </div>
+      <div class="section-container">
+        <div class="section-header">
+          <h3>How It Works</h3>
+        </div>
+        <div class="content">
+          <p>This test feature creates a simulated job submission that follows the same pattern as real job submissions:</p>
+          <ol>
+            <li>A watcher is created in the database</li>
+            <li>A job is added to the database and linked to the watcher</li>
+            <li>Test files are automatically created</li>
+            <li>The job is set to 'queued' status directly</li>
+            <li>A simulation handler runs that mimics real processing</li>
+            <li>Progress is updated in the job monitor</li>
+          </ol>
+          <p>You can track the job's progress in the <a href="{{ url_for('job_monitor_jobs') }}">Job Monitor</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+  document.querySelectorAll('.config-sidebar a').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const sec = link.dataset.section;
+      document.querySelectorAll('.config-sidebar li').forEach(li => li.classList.remove('active'));
+      link.parentElement.classList.add('active');
+      document.querySelectorAll('.config-section').forEach(el => el.classList.remove('active'));
+      document.getElementById(sec).classList.add('active');
+    });
+  });
+</script>
 {% endblock %}

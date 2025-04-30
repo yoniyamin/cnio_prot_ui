@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 import os
 from datetime import datetime
-
+from src.utils import logger
 
 class JobsDB:
     def __init__(self, db_path="config/jobs.db"):
@@ -140,19 +140,20 @@ class JobsDB:
 
     # Add to jobs_db.py in the JobsDB class
     def get_watcher_id_for_job(self, job_id):
-        """Retrieve the watcher_id associated with a specific job."""
-        with sqlite3.connect(str(self.db_path)) as conn:
-            try:
-                cursor = conn.execute("""
-                    SELECT watcher_id 
-                    FROM jobs 
-                    WHERE job_id = ?
-                """, (job_id,))
+        """Get the watcher_id for a job."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                cursor = conn.execute("SELECT watcher_id FROM jobs WHERE job_id = ?", (job_id,))
                 result = cursor.fetchone()
-                return result[0] if result and result[0] is not None else None
-            except sqlite3.Error as e:
-                print(f"Failed to get watcher ID for job {job_id}: {e}")
+                if result and result[0]:
+                    return result[0]
                 return None
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting watcher_id for job: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting watcher_id for job: {e}")
+            return None
 
     def update_job_status(self, job_id, status):
         """Update status, possibly setting completion_time if done or errored."""
@@ -176,20 +177,30 @@ class JobsDB:
                 raise
 
     def link_job_to_watcher(self, job_id, watcher_id):
-        """Update a job record to associate it with a watcher"""
-        with sqlite3.connect(str(self.db_path)) as conn:
-            try:
-                conn.execute("""
-                    UPDATE jobs
-                    SET watcher_id = ?
-                    WHERE job_id = ?
-                """, (watcher_id, job_id))
-                conn.commit()
-                print(f"Linked job {job_id} to watcher {watcher_id}")
-                return True
-            except sqlite3.Error as e:
-                print(f"Failed to link job to watcher: {e}")
-                return False
+        """Link a job to a watcher in the database."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                # First check if the job exists
+                cursor = conn.execute("SELECT id FROM jobs WHERE job_id = ?", (job_id,))
+                job_record = cursor.fetchone()
+                
+                if job_record:
+                    # Update the job with the watcher_id
+                    conn.execute("""
+                        UPDATE jobs SET watcher_id = ? WHERE job_id = ?
+                    """, (watcher_id, job_id))
+                    conn.commit()
+                    logger.info(f"Linked job {job_id} to watcher {watcher_id}")
+                    return True
+                else:
+                    logger.warning(f"Cannot link job {job_id} to watcher {watcher_id}: Job not found")
+                    return False
+        except sqlite3.Error as e:
+            logger.error(f"Database error linking job to watcher: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error linking job to watcher: {e}")
+            return False
 
     def update_files_status(self, job_id, files_ready):
         """Update job status when files are ready"""

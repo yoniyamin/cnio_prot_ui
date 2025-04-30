@@ -7,7 +7,7 @@ jobs_db = JobsDB()
 
 class Job:
     def __init__(self, job_submitter, job_demands, job_type, command, expected_files,
-                 local_folder, job_name, job_colour=None, num_steps=None, args=None, kwargs=None):
+                 local_folder, job_name, job_colour=None, num_steps=None, args=None, kwargs=None, is_simulation=False):
         self.job_submitter = job_submitter
         self.job_demands = job_demands
         self.job_type = job_type
@@ -20,6 +20,7 @@ class Job:
         self.num_steps = num_steps or 3
         self.args = args or []
         self.kwargs = kwargs or {}
+        self.is_simulation = is_simulation
 
         self.progress = 0
         self.status = 'waiting'  # Initial status
@@ -53,7 +54,8 @@ class Job:
             "local_folder": self.local_folder,
             "status": self.status,
             "time_stamp": self._format_timestamp(),
-            "extras_dict": self.extras_dict
+            "extras_dict": self.extras_dict,
+            "is_simulation": self.is_simulation
         }
 
     def change_job_status(self, new_status):

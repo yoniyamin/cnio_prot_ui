@@ -4,7 +4,8 @@ import {
   loadWatchers,
   filterAndDisplayWatchers,
   createWatcher,
-  initWatchersPagination
+  initWatchersPagination,
+  forceWatcherRescan
 } from './watchers.js';
 
 import {
@@ -162,6 +163,7 @@ import * as watchersFunctions from './watchers.js';
 window.loadJobs = jobsFunctions.loadJobs;
 window.loadWatchers = watchersFunctions.loadWatchers;
 window.highlightSelectedJob = jobsFunctions.highlightSelectedJob;
+window.forceWatcherRescan = watchersFunctions.forceWatcherRescan;
 
 // Listen for URL changes (for when navigating from dashboard to jobs page)
 let lastUrl = location.href;

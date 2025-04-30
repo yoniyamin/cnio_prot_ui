@@ -305,12 +305,12 @@ th[data-sort].sort-desc::after {
 }
 
 /* Status Colors */
-.status-badge.monitoring {
+.status-badge.monitoring, .status-badge.running { 
   background-color: rgba(22, 163, 74, 0.1);
   color: rgb(22, 163, 74);
 }
 
-.status-badge.monitoring::before {
+.status-badge.monitoring::before, .status-badge.running::before {
   background-color: rgb(22, 163, 74);
 }
 
@@ -881,6 +881,7 @@ th[data-sort].sort-desc::after {
 .status-badge.waiting::before {
   background-color: rgb(234, 179, 8);
 }
+
 
 /* Simple grid for flash cards */
 .flashcard-grid {

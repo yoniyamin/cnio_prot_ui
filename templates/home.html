@@ -5,7 +5,18 @@
 
   <!-- 🖼️ Logo + Intro -->
   <div class="intro-section">
-    <img src="{{ url_for('static', filename='images/cnio-logo.png') }}" alt="CNIO Logo" class="cnio-logo invert-on-dark">
+      <img
+        src="{{ url_for('static', filename='images/cnio-logoLight.png') }}"
+        alt="CNIO Logo"
+        class="cnio-logo logo‑white"
+      >
+
+      <!-- dark‑text logo, for light‑mode -->
+      <img
+        src="{{ url_for('static', filename='images/cnio-logoDark.png') }}"
+        alt="CNIO Logo"
+        class="cnio-logo logo‑dark"
+      >
     <p>
       This interface was developed for the CNIO Proteomics Core Unit to support scientists and staff in executing proteomics
       searches and analysis pipelines in a user-friendly, automated environment.

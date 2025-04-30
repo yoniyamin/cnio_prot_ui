@@ -352,8 +352,8 @@ function viewJobDetails(jobId) {
   if (detailsContainer) detailsContainer.style.display = 'none';
   if (detailsError) detailsError.style.display = 'none';
 
-  // Set up tab navigation
-  setupTabNavigation();
+  // Set up tab navigation and activate the first tab by default
+  setupTabNavigation(true); // Pass true to force activating the basic tab
 
   // Function to close the modal
   const closeModal = () => {
@@ -397,9 +397,23 @@ function viewJobDetails(jobId) {
 }
 
 // Set up tab navigation
-function setupTabNavigation() {
+function setupTabNavigation(activateFirstTab = false) {
   const tabButtons = document.querySelectorAll('.tab-button');
   const tabContents = document.querySelectorAll('.tab-content');
+
+  // Default activation of the first tab
+  if (activateFirstTab && tabButtons.length > 0 && tabContents.length > 0) {
+    // Get the first tab button and its corresponding content
+    const firstButton = tabButtons[0];
+    const firstTabId = firstButton.dataset.tab;
+    const firstContent = document.getElementById(`${firstTabId}-tab`);
+
+    // Activate first tab and show its content
+    firstButton.classList.add('active');
+    if (firstContent) firstContent.style.display = 'block';
+
+    console.log(`Activated the first tab by default: ${firstTabId}`);
+  }
 
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -1147,5 +1161,7 @@ export {
   prevJobsPage,
   nextJobsPage,
   initJobsIconStyles,
-  highlightSelectedJob // Export the highlight function
+  highlightSelectedJob, // Export the highlight function
+  viewJobDetails,     // Make sure to export the fixed function
+  setupTabNavigation  // Make sure to export the fixed function
 }

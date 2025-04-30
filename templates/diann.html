@@ -5,80 +5,82 @@
 <div class="section-container">
   <form id="diann-form" method="POST" action="{{ url_for('diann') }}" enctype="multipart/form-data">
 
-    <div class="input-row">
-      <label for="job_name">Job Name:</label>
-      <input type="text" id="job_name" name="job_name" placeholder="My DIA-NN Analysis">
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button type="button" class="tab-button active" onclick="openDiannTab('basic-params')">Basic Parameters</button>
+      <button type="button" class="tab-button" onclick="openDiannTab('search-params')">Search Parameters</button>
+      <button type="button" class="tab-button" onclick="openDiannTab('adv-params')">Advanced Parameters</button>
     </div>
 
-    <div class="input-row">
-      <label for="fasta_file">FASTA File:</label>
-      <div class="file-path-container">
-        <input type="text" id="fasta_file_display" class="file-path-display" readonly placeholder="Select FASTA file">
-        <input type="hidden" id="fasta_file" name="fasta_file">
-        <button type="button" class="file-select-btn" onclick="selectFile('fasta_file', '.fasta')">Browse</button>
+    <!-- Basic Parameters -->
+    <div id="basic-params" class="tab-content active">
+      <div class="section-container">
+        <h3>Basic Parameters</h3>
+        <div class="input-row">
+          <label for="job_name">Job Name:</label>
+          <input type="text" id="job_name" name="job_name" placeholder="My DIA-NN Analysis">
+        </div>
+        <div class="input-row">
+          <label for="fasta_file">FASTA File:</label>
+          <div class="file-path-container">
+            <input type="text" id="fasta_file_display" class="file-path-display" readonly placeholder="Select FASTA file">
+            <input type="hidden" id="fasta_file" name="fasta_file">
+            <button type="button" class="file-select-btn" onclick="selectFile('fasta_file', '.fasta')">Browse</button>
+          </div>
+        </div>
+        <div class="input-row">
+          <label for="conditions_file">Conditions File:</label>
+          <div class="file-path-container">
+            <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
+            <input type="hidden" id="conditions_file" name="conditions_file">
+            <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
+          </div>
+          <div class="helper-text">
+            <button type="button" class="action-button secondary" style="padding:0.3em 0.6em; margin-top:0.5em;">Download Example</button>
+          </div>
+        </div>
+        <div class="input-row">
+          <label for="output_folder">Output Folder:</label>
+          <div class="file-path-container">
+            <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
+            <input type="hidden" id="output_folder" name="output_folder">
+            <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
+          </div>
+        </div>
+        <div class="input-row">
+          <label for="diann_path">DIA-NN Path:</label>
+          <div class="file-path-container">
+            <input type="text" id="diann_path_display" class="file-path-display" readonly placeholder="Path to DiaNN.exe">
+            <input type="hidden" id="diann_path" name="diann_path">
+            <button type="button" class="file-select-btn" onclick="selectFile('diann_path', '.exe')">Browse</button>
+          </div>
+        </div>
+        <div class="input-row">
+          <label for="msconvert_path">MSConvert Path:</label>
+          <div class="file-path-container">
+            <input type="text" id="msconvert_path_display" class="file-path-display" readonly placeholder="Path to msconvert.exe">
+            <input type="hidden" id="msconvert_path" name="msconvert_path">
+            <button type="button" class="file-select-btn" onclick="selectFile('msconvert_path', '.exe')">Browse</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="input-row">
-      <label for="conditions_file">Conditions File:</label>
-      <div class="file-path-container">
-        <input type="text" id="conditions_file_display" class="file-path-display" readonly placeholder="Select conditions file (.xlsx, .tsv, .txt)">
-        <input type="hidden" id="conditions_file" name="conditions_file">
-        <button type="button" class="file-select-btn" onclick="selectFile('conditions_file', '.xlsx,.tsv,.txt')">Browse</button>
-      </div>
-      <div class="helper-text">
-        <button type="button" class="action-button secondary" style="padding: 0.3em 0.6em; margin-top: 0.5em;" onclick="downloadExampleConditionFile()">Download Example</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="output_folder">Output Folder:</label>
-      <div class="file-path-container">
-        <input type="text" id="output_folder_display" class="file-path-display" readonly placeholder="Select output directory">
-        <input type="hidden" id="output_folder" name="output_folder">
-        <button type="button" class="file-select-btn" onclick="selectDirectory('output_folder')">Browse</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="diann_path">DIA-NN Path:</label>
-      <div class="file-path-container">
-        <input type="text" id="diann_path_display" class="file-path-display" readonly placeholder="Path to DiaNN.exe">
-        <input type="hidden" id="diann_path" name="diann_path">
-        <button type="button" class="file-select-btn" onclick="selectFile('diann_path', '.exe')">Browse</button>
-      </div>
-    </div>
-
-    <div class="input-row">
-      <label for="msconvert_path">MSConvert Path:</label>
-      <div class="file-path-container">
-        <input type="text" id="msconvert_path_display" class="file-path-display" readonly placeholder="Path to msconvert.exe">
-        <input type="hidden" id="msconvert_path" name="msconvert_path">
-        <button type="button" class="file-select-btn" onclick="selectFile('msconvert_path', '.exe')">Browse</button>
-      </div>
-    </div>
-
-    <!-- Tab view for additional parameters -->
-    <div class="tab-container" style="margin-top: 20px; border: 1px solid var(--line-clr); border-radius: 0.4em;">
-      <div class="tab-header" style="display: flex; border-bottom: 1px solid var(--line-clr);">
-        <button type="button" class="tab-button active" onclick="openTab(event, 'basic-params')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-clr); cursor: pointer; border-bottom: 2px solid var(--accent-clr);">Basic Parameters</button>
-        <button type="button" class="tab-button" onclick="openTab(event, 'adv-params')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-clr); cursor: pointer;">Advanced Parameters</button>
-      </div>
-
-      <div id="basic-params" class="tab-content" style="padding: 15px; display: block;">
+    <!-- Search Parameters -->
+    <div id="search-params" class="tab-content">
+      <div class="section-container">
+        <h3>Search Parameters</h3>
         <div class="input-row">
           <label for="missed_cleavage">Missed Cleavages:</label>
           <input type="number" id="missed_cleavage" name="missed_cleavage" value="1" min="0" max="3">
         </div>
-
         <div class="input-row">
           <label for="max_var_mods">Maximum Variable Modifications:</label>
           <input type="number" id="max_var_mods" name="max_var_mods" value="2" min="0" max="5">
         </div>
-
         <div class="input-row">
           <label>Modifications:</label>
-          <div class="checkbox-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="checkbox-group" style="grid-template-columns:1fr 1fr; gap:10px;">
             <div class="checkbox-item">
               <input type="checkbox" id="mod_nterm_m_excision" name="mod_nterm_m_excision" checked>
               <label for="mod_nterm_m_excision">N-term M excision</label>
@@ -105,73 +107,79 @@
             </div>
           </div>
         </div>
-
         <div class="input-row">
           <div class="checkbox-item">
             <input type="checkbox" id="mbr" name="mbr">
             <label for="mbr">Match between runs (MBR)</label>
           </div>
         </div>
-
         <div class="input-row">
           <label for="threads">Number of Threads:</label>
           <input type="number" id="threads" name="threads" value="20" min="1" max="64">
         </div>
       </div>
+    </div>
 
-      <div id="adv-params" class="tab-content" style="padding: 15px; display: none;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+    <!-- Advanced Parameters -->
+    <div id="adv-params" class="tab-content">
+      <div class="section-container">
+        <h3>Advanced Parameters</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
           <div class="input-row">
             <label>Peptide Length Range:</label>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="number" id="peptide_length_min" name="peptide_length_min" value="7" min="3" max="20" style="width: 70px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="number" id="peptide_length_min" name="peptide_length_min" value="7" min="3" max="20" style="width:70px;">
               <span>to</span>
-              <input type="number" id="peptide_length_max" name="peptide_length_max" value="30" min="10" max="50" style="width: 70px;">
+              <input type="number" id="peptide_length_max" name="peptide_length_max" value="30" min="10" max="50" style="width:70px;">
             </div>
           </div>
-
           <div class="input-row">
             <label>Precursor Charge Range:</label>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="number" id="precursor_charge_min" name="precursor_charge_min" value="2" min="1" max="4" style="width: 70px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="number" id="precursor_charge_min" name="precursor_charge_min" value="2" min="1" max="4" style="width:70px;">
               <span>to</span>
-              <input type="number" id="precursor_charge_max" name="precursor_charge_max" value="4" min="2" max="6" style="width: 70px;">
+              <input type="number" id="precursor_charge_max" name="precursor_charge_max" value="4" min="2" max="6" style="width:70px;">
             </div>
           </div>
-
           <div class="input-row">
             <label>Precursor m/z Range:</label>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="number" id="precursor_min" name="precursor_min" value="390" min="300" max="600" style="width: 70px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="number" id="precursor_min" name="precursor_min" value="390" min="300" max="600" style="width:70px;">
               <span>to</span>
-              <input type="number" id="precursor_max" name="precursor_max" value="1050" min="800" max="2000" style="width: 70px;">
+              <input type="number" id="precursor_max" name="precursor_max" value="1050" min="800" max="2000" style="width:70px;">
             </div>
           </div>
-
           <div class="input-row">
             <label>Fragment m/z Range:</label>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="number" id="fragment_min" name="fragment_min" value="200" min="100" max="400" style="width: 70px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="number" id="fragment_min" name="fragment_min" value="200" min="100" max="400" style="width:70px;">
               <span>to</span>
-              <input type="number" id="fragment_max" name="fragment_max" value="1800" min="1000" max="3000" style="width: 70px;">
+              <input type="number" id="fragment_max" name="fragment_max" value="1800" min="1000" max="3000" style="width:70px;">
             </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Form Actions -->
     <div class="form-actions">
       <button type="submit" class="action-button primary">Run DIA-NN</button>
-      <button type="button" class="action-button secondary" onclick="saveAllDefaults()">Save Defaults</button>
+      <button type="button" class="action-button secondary">Save Defaults</button>
       <button type="reset" class="action-button secondary">Reset Form</button>
     </div>
-  </form>
 
-  <!-- Result container will be shown here after submission -->
-  <div id="submission-result" class="submission-result" style="display:none;"></div>
+  </form>
 </div>
 
-<!-- Toast notification container -->
+<!-- Center Form Style -->
+<style>
+  #diann-form { max-width:800px; margin:0 auto; }
+</style>
+
+  <!-- Result container -->
+  <div id="submission-result" class="submission-result" style="display:none;"></div>
+
+    <!-- Toast notification -->
 <div id="toast-notification" class="toast">
   <div class="toast-content">
     <span class="toast-message"></span>
@@ -180,38 +188,25 @@
 </div>
 
 <script type="module">
-  // Import UI utilities
   import { initToasts } from '/static/js/ui_utils.js';
-
-  // Initialize toast notifications
-  document.addEventListener('DOMContentLoaded', function() {
-    initToasts();
-  });
+  document.addEventListener('DOMContentLoaded', () => initToasts());
 </script>
 
 <script>
-  // Tab functionality
-  function openTab(evt, tabName) {
-    var i, tabContent, tabButtons;
+   function openDiannTab(tabId) {
+      // deactivate all buttons
+      document.querySelectorAll('.tab-navigation .tab-button')
+              .forEach(btn => btn.classList.remove('active'));
 
-    // Hide all tab content
-    tabContent = document.getElementsByClassName("tab-content");
-    for (i = 0; i < tabContent.length; i++) {
-      tabContent[i].style.display = "none";
+      // hide all tab contents
+      document.querySelectorAll('#diann-form .tab-content')
+              .forEach(tc => tc.classList.remove('active'));
+
+      // activate the clicked tab button and its content
+      document.querySelector(`.tab-navigation .tab-button[onclick*="${tabId}"]`)
+              .classList.add('active');
+      document.getElementById(tabId).classList.add('active');
     }
-
-    // Remove "active" class from all tab buttons
-    tabButtons = document.getElementsByClassName("tab-button");
-    for (i = 0; i < tabButtons.length; i++) {
-      tabButtons[i].className = tabButtons[i].className.replace(" active", "");
-      tabButtons[i].style.borderBottom = "none";
-    }
-
-    // Show the current tab and add "active" class to the button
-    document.getElementById(tabName).style.display = "block";
-    evt.currentTarget.className += " active";
-    evt.currentTarget.style.borderBottom = "2px solid var(--accent-clr)";
-  }
 
   // Function to download example condition file
   function downloadExampleConditionFile() {
@@ -541,9 +536,9 @@
     const formData = new FormData(document.getElementById('diann-form'));
 
     // Submit form via fetch API
-    fetch('{{ url_for('diann') }}', {
+    fetch("{{ url_for('diann') }}", {
       method: 'POST',
-      body: formData
+      body: new FormData(this)
     })
     .then(response => response.text())
     .then(result => {
