@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Job Submission</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
+  <style>body { background: var(--bg-clr); color: var(--text-clr); padding: 1rem; }</style>
+</head>
+<body>
+<h2>Test Job Submission</h2>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>Submit a Test Job</h3>
+    <p class="subtitle">This form allows you to test job submission and monitor job progress without running actual processing.</p>
+  </div>
+
+  <form id="test-job-form" method="POST" action="{{ url_for('test_job_submission') }}">
+    <div class="input-row">
+      <label for="job_type">Job Type:</label>
+      <select id="job_type" name="job_type" required>
+        <option value="">Select a job type</option>
+        <option value="maxquant">MaxQuant</option>
+        <option value="diann">DIA-NN</option>
+      </select>
+    </div>
+
+    <div class="input-row">
+      <label for="job_name">Job Name:</label>
+      <input type="text" id="job_name" name="job_name" placeholder="Test job name (optional)">
+      <div class="helper-text">If left blank, a name will be generated automatically.</div>
+    </div>
+
+    <div class="input-row">
+      <div class="checkbox-item">
+        <input type="checkbox" id="simulate_error" name="simulate_error">
+        <label for="simulate_error">Simulate error during execution</label>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="action-button primary">Submit Test Job</button>
+      <button type="reset" class="action-button secondary">Reset Form</button>
+    </div>
+  </form>
+</div>
+
+<div class="section-container">
+  <div class="section-header">
+    <h3>How It Works</h3>
+  </div>
+  <div class="content">
+    <p>This test feature creates a simulated job submission that follows the same pattern as real job submissions:</p>
+    <ol>
+      <li>A watcher is created in the database</li>
+      <li>A job is added to the database and linked to the watcher</li>
+      <li>Test files are automatically created</li>
+      <li>The job is set to 'queued' status directly (skipping the waiting state)</li>
+      <li>A simulation handler runs that mimics the behavior of the real handler but doesn't do any actual processing</li>
+      <li>Progress is updated in the job monitor</li>
+    </ol>
+    <p>You can track the job's progress in the <a href="{{ url_for('job_monitor_jobs') }}">Job Monitor</a>.</p>
+  </div>
+</div>
+</body>
+</html> 

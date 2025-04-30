@@ -18,6 +18,8 @@ class JobsDB:
         with sqlite3.connect(str(self.db_path)) as conn:
             self._create_tables(conn)
 
+            self.ensure_job_columns()
+
     def _create_tables(self, conn):
         """Create the jobs table (including watcher_name)."""
         try:
@@ -155,14 +157,93 @@ class JobsDB:
             logger.error(f"Error getting watcher_id for job: {e}")
             return None
 
+    def update_job_progress(self, job_id, progress):
+        """Update the progress of a job in the database."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                # First check if we have a progress column
+                cursor = conn.execute("PRAGMA table_info(jobs)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                # If progress column doesn't exist, add it
+                if 'progress' not in columns:
+                    conn.execute("ALTER TABLE jobs ADD COLUMN progress REAL DEFAULT 0")
+                    logger.info("Added progress column to jobs table")
+                    conn.commit()
+
+                # Now update the progress
+                conn.execute("""
+                    UPDATE jobs SET progress = ? WHERE job_id = ?
+                """, (progress, job_id))
+                conn.commit()
+                logger.debug(f"Updated progress for job {job_id} to {progress}")
+                return True
+        except sqlite3.Error as e:
+            logger.error(f"Error updating job progress: {e}")
+            return False
+
+    def ensure_job_columns(self):
+        """Ensure the jobs table has all necessary columns."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                # Check if columns exist
+                cursor = conn.execute("PRAGMA table_info(jobs)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                columns_to_add = []
+
+                # Add missing columns if needed
+                if 'progress' not in columns:
+                    columns_to_add.append("ADD COLUMN progress REAL DEFAULT 0")
+
+                if 'start_time' not in columns:
+                    columns_to_add.append("ADD COLUMN start_time DATETIME")
+
+                # Execute the alter table statements if we have any
+                if columns_to_add:
+                    for alter_stmt in columns_to_add:
+                        try:
+                            conn.execute(f"ALTER TABLE jobs {alter_stmt}")
+                            logger.info(f"Executed column update: {alter_stmt}")
+                        except sqlite3.Error as e:
+                            logger.error(f"Error adding column {alter_stmt}: {e}")
+                    conn.commit()
+
+                return True
+        except sqlite3.Error as e:
+            logger.error(f"Error ensuring job columns: {e}")
+            return False
+
     def update_job_status(self, job_id, status):
-        """Update status, possibly setting completion_time if done or errored."""
+        """Update status, setting appropriate timestamps based on state."""
         with sqlite3.connect(str(self.db_path)) as conn:
             try:
+                # Get the current status to avoid unnecessary updates
+                cursor = conn.execute("SELECT status FROM jobs WHERE job_id = ?", (job_id,))
+                current_status = cursor.fetchone()
+
+                if current_status and current_status[0] == status:
+                    # Status hasn't changed, no need to update
+                    return True
+
+                # Check if we need to add the start_time column
+                cursor = conn.execute("PRAGMA table_info(jobs)")
+                columns = [row[1] for row in cursor.fetchall()]
+                if 'start_time' not in columns:
+                    conn.execute("ALTER TABLE jobs ADD COLUMN start_time DATETIME")
+                    logger.info("Added start_time column to jobs table")
+
+                # Update status with appropriate timestamp
                 if status in ["completed", "cancelled", "errored"]:
                     conn.execute("""
                         UPDATE jobs
                         SET status = ?, completion_time = CURRENT_TIMESTAMP
+                        WHERE job_id = ?
+                    """, (status, job_id))
+                elif status == "running":
+                    conn.execute("""
+                        UPDATE jobs
+                        SET status = ?, start_time = CURRENT_TIMESTAMP
                         WHERE job_id = ?
                     """, (status, job_id))
                 else:
@@ -172,9 +253,11 @@ class JobsDB:
                         WHERE job_id = ?
                     """, (status, job_id))
                 conn.commit()
+                logger.info(f"Updated job {job_id} status to {status}")
+                return True
             except sqlite3.Error as e:
-                print(f"Failed to update job status: {e}")
-                raise
+                logger.error(f"Failed to update job status: {e}")
+                return False
 
     def link_job_to_watcher(self, job_id, watcher_id):
         """Link a job to a watcher in the database."""
