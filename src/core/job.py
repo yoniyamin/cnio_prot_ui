@@ -29,7 +29,7 @@ class Job:
         self.cancelled = False
         self.error_flag = False
         self.time_stamp = None
-        self.extras_dict = {}
+        self.extras_dict = {"is_simulation": is_simulation}
 
         # Locks
         self.expected_files_lock = Lock()

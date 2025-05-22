@@ -184,6 +184,8 @@ function sortWatchers() {
   displayWatchers(getPaginatedWatchers());
 }
 
+
+
 function getPaginatedWatchers() {
   if (!Array.isArray(filteredWatchers)) {
     return [];
@@ -259,7 +261,7 @@ function displayWatchers(watchers) {
 
     // Status column
     const statusCell = document.createElement('td');
-    statusCell.className = 'col-status status-cell'; // Added status-cell class for rescan button targeting
+    statusCell.className = 'col-status';
     const statusBadge = document.createElement('span');
     const status = (watcher.status || 'unknown').toLowerCase();
     statusBadge.className = `status-badge ${status}`;
@@ -327,20 +329,9 @@ function displayWatchers(watchers) {
 
     // Actions column
     const actionsCell = document.createElement('td');
-    actionsCell.className = 'col-actions actions-cell'; // Added actions-cell class for rescan button targeting
-
+    actionsCell.className = 'col-actions';
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'action-icons';
-
-    // Add rescan button only for monitoring watchers
-    if (status === 'monitoring') {
-      const rescanButton = document.createElement('button');
-      rescanButton.className = 'action-icon rescan rescan-btn';
-      rescanButton.title = 'Rescan folder for files';
-      rescanButton.innerHTML = '<i class="fas fa-sync-alt"></i>';
-      rescanButton.dataset.id = watcher.id;
-      actionsDiv.appendChild(rescanButton);
-    }
 
     // Toggle details button
     const toggleButton = document.createElement('button');
@@ -400,22 +391,11 @@ function attachRowEventListeners() {
     });
   });
 
-  // NEW: Attach click handlers for rescan buttons
-  document.querySelectorAll('.rescan-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent event bubbling
-      const watcherId = btn.dataset.id;
-      if (watcherId) {
-        forceWatcherRescan(watcherId);
-      }
-    });
-  });
-
   // Optional: Make entire rows clickable for expansion
   document.querySelectorAll('.watcher-row').forEach(row => {
     row.addEventListener('click', (e) => {
       // Only toggle if not clicking on action buttons
-      if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details, .rescan-btn')) {
+      if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details')) {
         const watcherId = row.dataset.watcherId;
         if (watcherId) {
           toggleWatcherDetails(watcherId);
@@ -425,62 +405,6 @@ function attachRowEventListeners() {
   });
 }
 
-// NEW: Function to force a watcher to rescan its folder
-export function forceWatcherRescan(watcherId) {
-  console.log(`Forcing rescan for watcher ID: ${watcherId}`);
-
-  // Show a loading indicator on the rescan button
-  const rescanBtn = document.querySelector(`.rescan-btn[data-id="${watcherId}"]`);
-  if (rescanBtn) {
-    const originalHTML = rescanBtn.innerHTML;
-    rescanBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-    rescanBtn.disabled = true;
-  }
-
-  // Call the rescan API endpoint
-  fetch(`/api/watchers/${watcherId}/rescan`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    return response.json();
-  })
-  .then(data => {
-    console.log("Rescan response:", data);
-
-    // Show success message
-    window.showToast?.('Folder rescan initiated', 'success');
-
-    // If the watcher details are expanded, refresh the files
-    const detailsRow = document.querySelector(`.watcher-details-row[data-watcher-id="${watcherId}"]`);
-    if (detailsRow) {
-      // Give a moment for the backend to process files
-      setTimeout(() => {
-        loadWatcherFiles(watcherId, detailsRow);
-      }, 1000);
-    }
-
-    // Refresh the watcher list to get updated counts
-    setTimeout(loadWatchers, 2000);
-  })
-  .catch(error => {
-    console.error("Error during rescan:", error);
-    window.showToast?.(`Rescan failed: ${error.message}`, 'error');
-  })
-  .finally(() => {
-    // Restore the rescan button
-    const rescanBtn = document.querySelector(`.rescan-btn[data-id="${watcherId}"]`);
-    if (rescanBtn) {
-      rescanBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
-      rescanBtn.disabled = false;
-    }
-  });
-}
 
 // ====== Create a single watcher row ======
 function createWatcherRow(watcher) {
@@ -492,7 +416,7 @@ function createWatcherRow(watcher) {
   // Make entire row clickable for expansion
   row.addEventListener('click', (e) => {
     // Only toggle if not clicking on action buttons
-    if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details, .expand-watcher, .rescan-btn')) {
+    if (!e.target.closest('.action-icon, .stop-watcher, .toggle-details, .expand-watcher')) {
       toggleWatcherDetails(watcher.id);
     }
   });
@@ -505,11 +429,6 @@ function createWatcherRow(watcher) {
   const usingNewUI = document.querySelector('.status-badge') !== null;
 
   if (usingNewUI) {
-    // Determine if we should show rescan button
-    const isMonitoring = watcher.status === 'monitoring';
-    const rescanButton = isMonitoring ?
-      `<img src="/static/images/sync.png" alt="Rescan" class="rescan-btn" title="Rescan Folder" data-id="${watcher.id}">` : '';
-
     row.innerHTML = `
       <td>${watcher.id}</td>
       <td>${watcher.job_name_prefix}</td>
@@ -529,11 +448,10 @@ function createWatcherRow(watcher) {
       <td>${formattedDate}</td>
       <td>
        <div class="action-icons">
-              ${rescanButton}
-              <img src="/images/listfiles.png" alt="Show Files" class="toggle-details" title="Show Files" data-id="${watcher.id}">
+              <img src="/images/listfiles.png" alt="Show Files" class="toggle-details" title="Show Files">
               ${
         watcher.status === 'monitoring'
-            ? `<img src="/static/images/stop.png" alt="Terminate" class="stop-watcher" title="Terminate Watcher" data-id="${watcher.id}">`
+            ? `<img src="/static/images/stop.png" alt="Terminate" class="stop-watcher" title="Terminate Watcher">`
             : ''
     }
       </div>
@@ -542,13 +460,6 @@ function createWatcherRow(watcher) {
   } else {
     // Old UI variant
     const statusColor = getStatusColor(watcher.status);
-    // Determine if we should show rescan button
-    const isMonitoring = watcher.status === 'monitoring';
-    const rescanButton = isMonitoring ?
-      `<button class="action-icon sync rescan-btn" title="Rescan Folder" data-id="${watcher.id}">
-         <i class="fas fa-sync-alt"></i>
-       </button>` : '';
-
     row.innerHTML = `
       <td class="p-2 border">${watcher.id}</td>
       <td class="p-2 border">${watcher.job_name_prefix}</td>
@@ -569,13 +480,12 @@ function createWatcherRow(watcher) {
       <td class="p-2 border">${formattedDate}</td>
       <td class="p-2 border text-center">
         <div class="flex justify-center gap-1">
-          ${rescanButton}
-          <button class="action-icon info toggle-details" title="Show Files" data-id="${watcher.id}">
-            <img src="/static/images/listfiles.png" alt="Show Files" class="h-5 w-5">
-          </button>
+          <button class="action-icon info toggle-details" title="Show Files">
+          <img src="/static/images/listfiles.png" alt="Show Files" class="h-5 w-5">
+        </button>
           ${
           watcher.status === 'monitoring'
-            ? `<button class="action-icon terminate stop-watcher" title="Terminate Watcher" data-id="${watcher.id}">
+            ? `<button class="action-icon terminate stop-watcher" title="Terminate Watcher">
                 <img src="/static/images/stop.png" alt="Terminate" class="h-5 w-5">
               </button>`
             : ''
@@ -597,13 +507,6 @@ function createWatcherRow(watcher) {
   stopBtn?.addEventListener('click', (e) => {
     e.stopPropagation(); // Prevent row click from bubbling
     confirmStopWatcher(watcher.id);
-  });
-
-  // NEW: Rescan button
-  const rescanBtn = row.querySelector('.rescan-btn');
-  rescanBtn?.addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent row click from bubbling
-    forceWatcherRescan(watcher.id);
   });
 
   return row;
@@ -743,17 +646,7 @@ function loadWatcherFiles(watcherId, detailsRow) {
         tableBody.innerHTML = `
           <tr><td colspan="4" class="loading-message">
             <span>No files captured yet</span>
-            <button class="action-button secondary rescan-files-btn mt-2">Rescan Folder</button>
           </td></tr>`;
-
-        // Add rescan button if no files found
-        const rescanBtn = tableBody.querySelector('.rescan-files-btn');
-        if (rescanBtn) {
-          rescanBtn.addEventListener('click', () => {
-            forceWatcherRescan(watcherId);
-            setTimeout(() => loadWatcherFiles(watcherId, detailsRow), 2000);
-          });
-        }
         return;
       }
 
@@ -1094,8 +987,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const style = document.createElement('style');
   style.textContent = `
     .toggle-details,
-    .stop-watcher,
-    .rescan-btn {
+    .stop-watcher {
       width: 1.25rem;
       height: 1.25rem;
       background: none;
@@ -1106,12 +998,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     .data-table tbody tr:hover .action-icons img {
       background: transparent;
-    }
-    
-    /* Add this for the rescan button hover effect */
-    .rescan-btn:hover i {
-      transform: rotate(180deg);
-      transition: transform 0.5s ease;
     }
   `;
   document.head.appendChild(style);
@@ -1191,3 +1077,126 @@ document.addEventListener('DOMContentLoaded', () => {
     loadWatchers();
   }
 });
+
+// Force a watcher to rescan its folder
+window.forceWatcherRescan = function(watcherId) {
+  console.log(`Forcing rescan for watcher ${watcherId}`);
+  
+  // First show a loading indicator
+  const detailsRow = document.querySelector(`.watcher-details-row[data-watcher-id="${watcherId}"]`);
+  if (detailsRow) {
+    const tableBody = detailsRow.querySelector('.files-table tbody');
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Rescanning folder...</span>
+          </td>
+        </tr>`;
+    }
+  }
+
+  // Call the API endpoint
+  fetch(`/api/watchers/${watcherId}/rescan`, {
+    method: 'POST',
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      console.log("Rescan response:", data);
+      if (data.success) {
+        showToast?.('Folder rescan triggered successfully', 'success');
+        // Wait a moment for files to be processed, then refresh the list
+        setTimeout(() => {
+          // Refresh the files list after scan
+          if (detailsRow) {
+            loadWatcherFiles(watcherId, detailsRow);
+          }
+        }, 1000);
+      } else {
+        showToast?.(`Error: ${data.error || 'Failed to rescan folder'}`, 'error');
+        // Refresh the file list anyway after an error
+        if (detailsRow) {
+          loadWatcherFiles(watcherId, detailsRow);
+        }
+      }
+    })
+    .catch((error) => {
+      console.error('Error triggering rescan:', error);
+      showToast?.('Error communicating with server', 'error');
+      // Refresh the file list anyway after an error
+      if (detailsRow) {
+        loadWatcherFiles(watcherId, detailsRow);
+      }
+    });
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Set up event delegation for rescan button
+  document.body.addEventListener('click', (e) => {
+    if (e.target.closest('.rescan-folder')) {
+      const detailsRow = e.target.closest('.watcher-details-row');
+      if (detailsRow) {
+        const watcherId = detailsRow.dataset.watcherId;
+        if (watcherId) {
+          // Call the function directly since we're in the same module
+          window.forceWatcherRescan(watcherId);
+        }
+      }
+    }
+  });
+});
+
+// Force a watcher to rescan its folder
+window.forceWatcherRescan = function(watcherId) {
+  console.log(`Forcing rescan for watcher ${watcherId}`);
+  
+  // First show a loading indicator
+  const detailsRow = document.querySelector(`.watcher-details-row[data-watcher-id="${watcherId}"]`);
+  if (detailsRow) {
+    const tableBody = detailsRow.querySelector('.files-table tbody');
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="loading-message">
+            <div class="loading-spinner"></div>
+            <span>Rescanning folder...</span>
+          </td>
+        </tr>`;
+    }
+  }
+
+  // Call the API endpoint
+  fetch(`/api/watchers/${watcherId}/rescan`, {
+    method: 'POST',
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      console.log("Rescan response:", data);
+      if (data.success) {
+        showToast?.('Folder rescan triggered successfully', 'success');
+        // Wait a moment for files to be processed, then refresh the list
+        setTimeout(() => {
+          // Refresh the files list after scan
+          if (detailsRow) {
+            loadWatcherFiles(watcherId, detailsRow);
+          }
+        }, 1000);
+      } else {
+        showToast?.(`Error: ${data.error || 'Failed to rescan folder'}`, 'error');
+        // Refresh the file list anyway after an error
+        if (detailsRow) {
+          loadWatcherFiles(watcherId, detailsRow);
+        }
+      }
+    })
+    .catch((error) => {
+      console.error('Error triggering rescan:', error);
+      showToast?.('Error communicating with server', 'error');
+      // Refresh the file list anyway after an error
+      if (detailsRow) {
+        loadWatcherFiles(watcherId, detailsRow);
+      }
+    });
+};
+

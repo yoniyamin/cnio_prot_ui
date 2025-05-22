@@ -34,7 +34,7 @@ function getPaginatedJobs() {
   return jobs.slice(startIndex, endIndex);
 }
 
-function loadJobs(showLoading = true) {
+function loadJobs(showLoading = true, refresh = true) {
   const tbody = document.querySelector('#jobs-table tbody');
 
   if (showLoading && tbody) {
@@ -48,27 +48,75 @@ function loadJobs(showLoading = true) {
     `;
   }
 
-  // Use the jobs data passed from the Flask template
-  const jobs = window.jobsData || [];
-  console.log('Loaded jobs:', jobs); // Debug log to confirm data
+  // If refresh is true, fetch fresh data from the API
+  if (refresh) {
+    return fetch('/api/jobs')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch jobs: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        // Update window.jobsData with fresh data
+        window.jobsData = data.jobs || [];
+        console.log('Fetched jobs from API:', window.jobsData);
 
-  // Check for job_id in the URL to navigate to the correct page
-  const urlParams = new URLSearchParams(window.location.search);
-  const jobId = urlParams.get('job_id');
-  if (jobId) {
-    // Find the index of the job in the sorted data
-    const jobIndex = jobs.findIndex(job => String(job.job_id) === String(jobId));
-    if (jobIndex !== -1) {
-      // Calculate the page number (1-based)
-      const page = Math.floor(jobIndex / jobsPerPage) + 1;
-      currentJobsPage = page;
-      console.log(`Found job #${jobId} at index ${jobIndex}, setting page to ${page}`);
-    } else {
-      console.warn(`Job ID ${jobId} not found in jobs data`);
+        // Check for job_id in the URL to navigate to the correct page
+        const urlParams = new URLSearchParams(window.location.search);
+        const jobId = urlParams.get('job_id');
+        if (jobId) {
+          // Find the index of the job in the sorted data
+          const jobIndex = window.jobsData.findIndex(job => String(job.job_id) === String(jobId));
+          if (jobIndex !== -1) {
+            // Calculate the page number (1-based)
+            const page = Math.floor(jobIndex / jobsPerPage) + 1;
+            currentJobsPage = page;
+            console.log(`Found job #${jobId} at index ${jobIndex}, setting page to ${page}`);
+          } else {
+            console.warn(`Job ID ${jobId} not found in jobs data`);
+          }
+        }
+
+        return sortAndDisplayJobs('id', false, window.jobsData);
+      })
+      .catch(error => {
+        console.error('Error loading jobs:', error);
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>Failed to load jobs: ${error.message}</span>
+              </td>
+            </tr>
+          `;
+        }
+        return [];
+      });
+  } else {
+    // Use the jobs data passed from the Flask template
+    const jobs = window.jobsData || [];
+    console.log('Using cached jobs data:', jobs); // Debug log to confirm data
+
+    // Check for job_id in the URL to navigate to the correct page
+    const urlParams = new URLSearchParams(window.location.search);
+    const jobId = urlParams.get('job_id');
+    if (jobId) {
+      // Find the index of the job in the sorted data
+      const jobIndex = jobs.findIndex(job => String(job.job_id) === String(jobId));
+      if (jobIndex !== -1) {
+        // Calculate the page number (1-based)
+        const page = Math.floor(jobIndex / jobsPerPage) + 1;
+        currentJobsPage = page;
+        console.log(`Found job #${jobId} at index ${jobIndex}, setting page to ${page}`);
+      } else {
+        console.warn(`Job ID ${jobId} not found in jobs data`);
+      }
     }
-  }
 
-  return sortAndDisplayJobs('id', false, jobs);
+    return sortAndDisplayJobs('id', false, jobs);
+  }
 }
 
 // ====== Sort jobs (table header clicks, etc.) ======
@@ -1134,6 +1182,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ensure window.jobsData is set before calling loadJobs
     window.jobsData = window.jobsData || [];
     loadJobs();
+
+    // Set up automatic refresh of job statuses every 10 seconds
+    window.jobsRefreshInterval = setInterval(() => {
+      console.log("Auto-refreshing jobs...");
+      loadJobs(false, true);
+    }, 10000);
   }
 
   // Attach pagination event listeners
@@ -1152,6 +1206,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => loadJobs(true));
   }
+
+  // Clean up interval when page is unloaded
+  window.addEventListener('beforeunload', () => {
+    if (window.jobsRefreshInterval) {
+      clearInterval(window.jobsRefreshInterval);
+    }
+  });
 });
 
 export {

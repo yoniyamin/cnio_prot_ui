@@ -3,7 +3,7 @@ import json
 
 import webview
 
-from src.utils import logger
+from src.logging_utils import logger
 from src.core.system_try import restore_window
 
 

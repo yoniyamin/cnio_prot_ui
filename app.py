@@ -5,9 +5,12 @@ import sys
 # Import project modules
 from app_core import start_flask, init_app, app, destroy_splash_window
 from src.core.system_try import setup_tray, on_closed, on_minimize, HAS_SYSTRAY
-from src.utils import logger
+from src.logging_utils import get_logger
 
-UI_DEBUG_MODE = False
+# Get module-specific logger
+logger = get_logger(__name__)
+
+UI_DEBUG_MODE = True
 
 # Track if tray has already been set up
 tray_setup_complete = False
@@ -62,7 +65,7 @@ if __name__ == "__main__":
                 handlers_setup_complete.add(window_id)
                 return True
             else:
-                logger.error(f"Could not find main window with ID: {window_id}")
+                logger.error(f"Could not find main window with ID: {window_id}", exc_info=True)
                 return False
 
 

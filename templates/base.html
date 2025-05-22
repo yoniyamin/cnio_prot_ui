@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proteomics Core</title>
+  <title>{% block title %}Proteomics Core{% endblock %}</title>
      <link rel="icon" type="image/ico" href="{{ url_for('static', filename='favicon.ico') }}">
 
   <!-- Use Flask's url_for to reference static files -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='job_monitor.css') }}">
   <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
+
+  <!-- Local CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <button id="theme-toggle" class="theme-toggle">🌙</button>
@@ -21,7 +24,7 @@
       <li>
         <span class="logo">Proteomics Core</span>
         <button onclick="toggleSidebar()" id="toggle-btn">
-          <!-- “Double chevron left” icon -->
+          <!-- "Double chevron left" icon -->
           <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
                width="24px" fill="#e8eaed">
             <path d="m313-480 155 156q11 11 11.5 27.5T468-268q-11 11-28 11t-28-11L228-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15
@@ -34,7 +37,7 @@
       <!-- Home -->
       <li class="active">
         <a href="{{ url_for('home') }}">
-          <!-- “Home” icon -->
+          <!-- "Home" icon -->
           <img src="{{ url_for('static', filename='icons/logo.svg') }}" alt="Profile" class="icon">
           <span>Home</span>
         </a>
@@ -45,7 +48,7 @@
         <button onclick="toggleSubMenu(this)" class="dropdown-btn">
           <img src="{{ url_for('static', filename='icons/search.svg') }}" alt="Profile" class="icon">
           <span>Searches</span>
-          <!-- “Keyboard arrow down” icon -->
+          <!-- "Keyboard arrow down" icon -->
           <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
                width="24px" fill="#e8eaed">
             <path d="M480-361q-8 0-15-2.5t-13-8.5L268-556q-11-11-11-28t11-28q11-11 28-11t28 11l156 156 156-156q11-11 28-11t28
@@ -67,7 +70,7 @@
         <button onclick="toggleSubMenu(this)" class="dropdown-btn">
           <img src="{{ url_for('static', filename='icons/pipeline.svg') }}" alt="Profile icon" class="icon" />
           <span>Pipelines</span>
-          <!-- “Keyboard arrow down” icon -->
+          <!-- "Keyboard arrow down" icon -->
           <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
                width="24px" fill="#e8eaed">
             <path d="M480-361q-8 0-15-2.5t-13-8.5L268-556q-11-11-11-28t11-28q11-11 28-11t28
@@ -117,7 +120,7 @@
       <!-- Configuration -->
       <li>
         <a href="{{ url_for('config') }}">
-          <!-- “Person” icon or any relevant icon -->
+          <!-- "Person" icon or any relevant icon -->
           <img src="{{ url_for('static', filename='icons/settings.svg') }}" alt="Profile icon" class="icon" />
           <span>Configuration</span>
         </a>
@@ -147,5 +150,9 @@
     </button>
   </div>
 </div>
+
+<!-- JavaScript -->
+<script src="{{ url_for('static', filename='js/utils.js') }}" type="module"></script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

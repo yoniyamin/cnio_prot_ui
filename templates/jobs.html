@@ -11,7 +11,7 @@
 {% block content %}
 <script>
 // Inject jobs data into window.jobsData for jobs.js to use
-window.jobsData = {{ jobs | tojson }};
+window.jobsData = {{ jobs | tojson | safe }};
 </script>
 
 <div class="page-header">
@@ -237,6 +237,15 @@ window.jobsData = {{ jobs | tojson }};
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
+  // Start progress updates for any running jobs when the page loads
+    const runningJobs = document.querySelectorAll('tr[data-status="running"]');
+    runningJobs.forEach(job => {
+        const jobId = job.getAttribute('data-job-id');
+        if (jobId) {
+            updateJobStatus(jobId);
+        }
+    });
+
 
   // Try to highlight the job row multiple times to handle any race conditions
   // or timing issues with asynchronous loading

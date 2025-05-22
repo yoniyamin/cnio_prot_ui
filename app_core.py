@@ -3,11 +3,18 @@ import time
 import webview
 from flask import Flask, jsonify, request
 import json
-from src.utils import logger
+from src.logging_utils import get_logger, log_dir
 from src.core.api_bridges import Api
 from src.core.job_queue_manager import JobQueueManager
+from src.core.job_status_manager import JobStatusManager
 import base64
 from src.core.file_utils import open_log_file
+
+# Get module-specific logger
+logger = get_logger(__name__)
+
+# Global variables for shared state
+watcher_manager = None  # Global watcher_manager reference
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -15,11 +22,13 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+logger.debug(f"Created uploads folder: {app.config['UPLOAD_FOLDER']}")
 
 # Load splash screen image
 logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static/images', 'CNIOProteomicsUnitLogo.png')
 with open(logo_path, 'rb') as f:
     img_data = base64.b64encode(f.read()).decode('utf-8')
+    logger.debug("Loaded splash screen logo")
 
 splash_html = f"""
 <!DOCTYPE html>
@@ -71,6 +80,74 @@ splash_html = f"""
 # Initialize database path
 watcher_db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db')
 job_queue_manager = JobQueueManager(db_path=watcher_db_path)
+logger.info(f"Initialized JobQueueManager with database: {watcher_db_path}")
+
+# Initialize the JobStatusManager
+from src.database.jobs_db import JobsDB
+from src.core.job_status_manager import job_status_manager, JobStatusManager
+jobs_db = JobsDB()
+# Initialize the singleton with proper dependencies
+JobStatusManager(jobs_db, job_queue_manager)
+logger.info("Initialized JobStatusManager with JobsDB and JobQueueManager")
+
+# Import and run job recovery to handle interrupted simulation jobs
+try:
+    import os
+    import threading
+    import time
+    from src.logging_utils import get_logger
+    logger = get_logger("app_core")
+    
+    # Make sure databases are initialized
+    from src.database.jobs_db import JobsDB
+    from src.database.watcher_db import WatcherDB
+    
+    # Check if recovery should be skipped (for testing or during development)
+    skip_recovery = os.environ.get('SKIP_RECOVERY', '').lower() in ('true', '1', 'yes', 'y')
+    
+    if skip_recovery:
+        logger.warning("⚠️ JOB RECOVERY DISABLED via SKIP_RECOVERY environment variable")
+    else:
+        # Ensure database directories exist first
+        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
+        os.makedirs(config_dir, exist_ok=True)
+        logger.debug(f"Created config directory: {config_dir}")
+        
+        # Initialize the databases first to ensure they're ready for the recovery process
+        jobs_db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'jobs.db')
+        jobs_db = JobsDB(db_path=jobs_db_path)
+        watcher_db = WatcherDB(db_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'watchers.db'))
+        
+        # Wait a moment to let the databases initialize
+        time.sleep(0.5)
+        
+        # Import the recovery function from routes to avoid initialization issues
+        # Import in a separate thread to avoid blocking the main thread and allow Flask to start up
+        def run_recovery():
+            try:
+                logger.info("Starting job recovery process in separate thread...")
+                time.sleep(2)  # Allow Flask app to initialize first
+                
+                # Import here to avoid circular import issues
+                from src.core.routes import check_and_restart_interrupted_jobs
+                
+                # Run the recovery process
+                logger.info("Running job recovery process...")
+                check_and_restart_interrupted_jobs()
+                
+            except Exception as e:
+                logger.error(f"Error during job recovery: {str(e)}", exc_info=True)
+        
+        # Start recovery in a separate thread
+        recovery_thread = threading.Thread(
+            target=run_recovery,
+            name="JobRecoveryThread",
+            daemon=True
+        )
+        recovery_thread.start()
+        logger.info("Job recovery thread started")
+except Exception as e:
+    logger.error(f"Error setting up job recovery: {str(e)}", exc_info=True)
 
 # Store window reference for API exposure
 window = None
@@ -500,3 +577,33 @@ def api_open_logs():
 # These imports must be after the app initialization to avoid circular imports
 from src.core.routes import *
 from src.core.api_endpoints import *
+
+# Initialize WatcherManager and load watchers
+try:
+    from src.database.watcher_db import WatcherDB
+    from src.watchers.watcher_manager import WatcherManager
+    
+    # Initialize the WatcherDB if not already done
+    watcher_db = WatcherDB(db_path=watcher_db_path)
+    
+    # Create and initialize the WatcherManager
+    watcher_manager = WatcherManager(watcher_db, job_queue_manager)
+    
+    # Load active watchers from database
+    watcher_manager.load_watchers()
+    
+    # Start the watchers in their own threads
+    watcher_manager.start_all()
+    
+    logger.info("WatcherManager initialized and active watchers loaded")
+except Exception as e:
+    logger.error(f"Error initializing WatcherManager: {str(e)}", exc_info=True)
+    # Initialize an empty WatcherManager to prevent import errors
+    if watcher_manager is None:
+        from src.watchers.watcher_manager import WatcherManager
+        try:
+            watcher_db = WatcherDB(db_path=watcher_db_path)
+            watcher_manager = WatcherManager(watcher_db, job_queue_manager)
+            logger.info("Created fallback empty WatcherManager")
+        except Exception as ex:
+            logger.error(f"Failed to create fallback WatcherManager: {str(ex)}", exc_info=True)

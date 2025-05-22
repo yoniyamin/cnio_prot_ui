@@ -193,6 +193,18 @@
 </script>
 
 <script>
+
+  // Function to open a specific tab
+   function startJobMonitoring(jobId) {
+       if (jobId) {
+           console.log(`Starting monitoring for job ${jobId}`);
+           updateJobStatus(jobId);
+           }
+   }
+
+   window.startJobMonitoring = startJobMonitoring;
+
+
    function openDiannTab(tabId) {
       // deactivate all buttons
       document.querySelectorAll('.tab-navigation .tab-button')
@@ -506,63 +518,97 @@
 
   // Form submission - validation and saving defaults
   document.getElementById('diann-form').addEventListener('submit', function(event) {
-    event.preventDefault(); // Prevent traditional form submission
+  event.preventDefault(); // Prevent traditional form submission
 
-    // Check required fields
-    const requiredFields = ['fasta_file', 'conditions_file', 'output_folder', 'diann_path'];
-    let missingFields = false;
+  // Check required fields
+  const requiredFields = ['fasta_file', 'conditions_file', 'output_folder', 'diann_path'];
+  let missingFields = false;
 
-    requiredFields.forEach(field => {
-      if (!document.getElementById(field).value) {
-        document.getElementById(field + '_display').classList.add('error');
-        missingFields = true;
-      } else {
-        document.getElementById(field + '_display').classList.remove('error');
+  requiredFields.forEach(field => {
+    if (!document.getElementById(field).value) {
+      document.getElementById(field + '_display').classList.add('error');
+      missingFields = true;
+    } else {
+      document.getElementById(field + '_display').classList.remove('error');
+    }
+  });
+
+  if (missingFields) {
+    window.showToast('Please fill in all required fields', 'warning');
+    return;
+  }
+
+  // Show submission status
+  const submitBtn = document.querySelector('button[type="submit"]');
+  const originalBtnText = submitBtn.textContent;
+  submitBtn.textContent = 'Submitting...';
+  submitBtn.disabled = true;
+
+  // Set AJAX headers to request JSON response
+  const headers = new Headers();
+  headers.append('X-Requested-With', 'XMLHttpRequest');
+  headers.append('Accept', 'application/json');
+
+  // Submit form via fetch API
+  fetch("{{ url_for('diann') }}", {
+    method: 'POST',
+    headers: headers,
+    body: new FormData(this)
+  })
+  .then(response => {
+    if (!response.ok) {
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        return response.json().then(data => {
+          throw new Error(data.error || 'Server error');
+        });
       }
-    });
-
-    if (missingFields) {
-      window.showToast('Please fill in all required fields', 'warning');
-      return;
+      throw new Error('Server error');
     }
 
-    // Show submission status
-    const submitBtn = document.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn.textContent;
-    submitBtn.textContent = 'Submitting...';
-    submitBtn.disabled = true;
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    }
 
-    // Collect form data
-    const formData = new FormData(document.getElementById('diann-form'));
+    // If not JSON, treat as text
+    return response.text().then(text => ({ html: text }));
+  })
+  .then(result => {
+    // Display result in container
+    const resultContainer = document.getElementById('submission-result');
 
-    // Submit form via fetch API
-    fetch("{{ url_for('diann') }}", {
-      method: 'POST',
-      body: new FormData(this)
-    })
-    .then(response => response.text())
-    .then(result => {
-      // Display result in a result container
-      const resultContainer = document.getElementById('submission-result');
-      resultContainer.innerHTML = result;
-      resultContainer.style.display = 'block';
-      resultContainer.scrollIntoView({ behavior: 'smooth' });
+    if (result.html) {
+      resultContainer.innerHTML = result.html;
+    } else {
+      resultContainer.innerHTML = '<div class="success-message">Job submitted successfully.</div>';
+    }
 
-      // Show success notification
-      window.showToast('DIA-NN job submitted successfully', 'success');
+    resultContainer.style.display = 'block';
+    resultContainer.scrollIntoView({ behavior: 'smooth' });
 
-      // Reset button
-      submitBtn.textContent = originalBtnText;
-      submitBtn.disabled = false;
-    })
-    .catch(error => {
-      console.error('Error submitting form:', error);
-      window.showToast('Error submitting form. Please try again.', 'error');
+    // Show success notification
+    window.showToast('DIA-NN job submitted successfully', 'success');
 
-      // Reset button
-      submitBtn.textContent = originalBtnText;
-      submitBtn.disabled = false;
-    });
+    // Reset button
+    submitBtn.textContent = originalBtnText;
+    submitBtn.disabled = false;
+
+    // Start job monitoring if we have a job ID and the function is available
+    if (result.job_id && typeof window.startJobMonitoring === 'function') {
+      console.log(`Starting job monitoring for job ${result.job_id}`);
+      window.startJobMonitoring(result.job_id);
+    }
+  })
+  .catch(error => {
+    console.error('Error submitting form:', error);
+    window.showToast('Error submitting form: ' + error.message, 'error');
+
+    // Reset button
+    submitBtn.textContent = originalBtnText;
+    submitBtn.disabled = false;
   });
+});
+
 </script>
 {% endblock %}

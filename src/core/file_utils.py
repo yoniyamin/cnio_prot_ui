@@ -3,7 +3,7 @@ import io
 import json
 import pandas as pd
 from pathlib import Path
-from src.utils import logger
+from src.logging_utils import logger
 import subprocess
 import platform
 

@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import threading
-from src.utils import logger
+from src.logging_utils import logger
 import datetime
 import subprocess
 import platform

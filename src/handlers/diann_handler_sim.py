@@ -4,6 +4,12 @@ import time
 from queue import Queue as ThreadQueue, Empty
 import threading
 from pathlib import Path
+import logging
+import os
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class DIANNSimHandler:
     def __init__(self, 
@@ -30,7 +36,8 @@ class DIANNSimHandler:
                  fragment_min="200",
                  fragment_max="1800",
                  threads="20",
-                 MBR=False):
+                 MBR=False,
+                 job_id=None):
         """
         Initialize the simulated DIA-NN handler with the same parameters as the real one
         """
@@ -59,6 +66,7 @@ class DIANNSimHandler:
         self.threads = threads
         self.MBR = MBR
         self.stop_requested = False
+        self.job_id = job_id
         
         # Create a stop sentinel file path
         self.sentinel_file = Path(self.op_folder) / "stop.sentinel"
@@ -66,11 +74,36 @@ class DIANNSimHandler:
         if self.progress_callback:
             self.progress_callback("Initializing simulated DIA-NN handler")
 
-    def log_progress(self, message):
-        """Log progress to the callback"""
+    def log_progress(self, message, progress_increment=None):
+        """
+        Log progress and update job progress
+        Args:
+            message: Progress message to log
+            progress_increment: Optional float between 0 and 1 to increment progress
+        """
+        logger.debug(f"DIA-NN Sim Job {self.job_id}: Progress update - {message}")
+        logger.info(f"DIA-NN Sim Job {self.job_id}: {message}")
+        
         if self.progress_callback:
             self.progress_callback(message)
             
+        # Update job progress if increment provided
+        if progress_increment is not None and hasattr(self, 'job'):
+            current_progress = getattr(self.job, 'progress', 0)
+            new_progress = min(1.0, current_progress + progress_increment)
+            self.job.progress = new_progress
+            
+            # Update database if we have job_id
+            if hasattr(self, 'job_id'):
+                from src.database.jobs_db import JobsDB
+                db = JobsDB()
+                db.update_job_progress(self.job_id, new_progress)
+                logger.debug(f"DIA-NN Sim Job {self.job_id} progress updated to {new_progress*100}%")
+                
+            # Send progress update to callback
+            if self.progress_callback:
+                self.progress_callback(f"{int(new_progress * 100)}%")
+
     def check_for_stop_signal(self):
         """Check if a stop was requested"""
         if Path(self.sentinel_file).exists():
@@ -149,35 +182,114 @@ class DIANNSimHandler:
             return False
         self.log_progress("STEP COMPLETED: DIA-NN plotter finished (simulated)")
         return True
-    
+
     def run_workflow(self):
-        """Run the complete simulated DIA-NN workflow"""
+        """Run the complete DIA-NN workflow simulation"""
         try:
-            # Setup
-            if not self.make_output_folder():
-                return False
-                
-            # Process conditions file
-            if not self.make_conditions_dict():
-                return False
-                
-            # Run MSConvert if needed
-            if self.msconvert_path and not self.run_msconvert():
-                return False
-                
-            # Run DIA-NN search
-            if not self.run_diann():
-                return False
-                
-            # Run DIA-NN plotter
+            # Initialize progress
+            self.log_progress("Starting DIA-NN workflow simulation...", 0.0)
+            logger.info(f"DIA-NN Sim Job {self.job_id} starting workflow")
+            
+            # Create output folder if it doesn't exist
+            os.makedirs(self.op_folder, exist_ok=True)
+            
+            # Create a simulation log file
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            log_file = os.path.join(self.op_folder, f"diann_log_{self.job_id}.txt")
+            with open(log_file, 'w') as f:
+                f.write(f"DIA-NN simulation log\nJob ID: {self.job_id}\nStarted at: {timestamp}\n")
+                f.write("Parameter settings:\n")
+                for attr_name in dir(self):
+                    if not attr_name.startswith('_') and not callable(getattr(self, attr_name)):
+                        f.write(f"{attr_name}: {getattr(self, attr_name)}\n")
+            logger.info(f"Created simulation log file: {log_file}")
+
+            # Create output folder - 5%
+            self.make_output_folder()
+            self.log_progress("Created output folder", 0.05)
+
+            # Run MSConvert simulation - 20%
+            self.run_msconvert()
+            self.log_progress("MSConvert simulation completed", 0.20)
+            
+            # Create mzML output files
+            if self.msconvert_path:
+                for i in range(2):  # Create 2 sample mzML files
+                    mzml_file = os.path.join(self.op_folder, f"sample_{i+1}_converted.mzML")
+                    with open(mzml_file, 'w') as f:
+                        f.write(f"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+                        f.write(f"<mzML xmlns=\"http://psi.hupo.org/ms/mzml\">\n")
+                        f.write(f"  <run id=\"sample_{i+1}\">\n")
+                        f.write(f"    <!-- Simulated mzML file created at {timestamp} -->\n")
+                        f.write(f"  </run>\n")
+                        f.write(f"</mzML>\n")
+                    logger.info(f"Created simulated mzML file: {mzml_file}")
+
+            # Run DIA-NN main analysis - 60%
+            self.run_diann()
+            self.log_progress("DIA-NN analysis simulation completed", 0.60)
+            
+            # Create search result files
+            report_file = os.path.join(self.op_folder, f"report.tsv")
+            with open(report_file, 'w') as f:
+                f.write("Protein.Group\tProtein.Ids\tProtein.Names\tGenes\tFirstProtein.Cscore\n")
+                f.write("1\tP12345\tTEST_PROTEIN\tTESTP\t0.999\n")
+                f.write("2\tP23456\tANOTHER_PROTEIN\tANOTP\t0.995\n")
+            logger.info(f"Created simulated report file: {report_file}")
+            
+            # Create a matrix file
+            matrix_file = os.path.join(self.op_folder, f"protein_matrix.tsv")
+            with open(matrix_file, 'w') as f:
+                f.write("Protein.Group\tProtein.Ids\tGenes\tSample1.Intensity\tSample2.Intensity\n")
+                f.write("1\tP12345\tTESTP\t5432.1\t6789.2\n")
+                f.write("2\tP23456\tANOTP\t1234.5\t2345.6\n")
+            logger.info(f"Created simulated matrix file: {matrix_file}")
+
+            # Run DIA-NN plotter - 15%
             self.run_diann_plotter()
+            self.log_progress("DIA-NN plotting completed", 0.15)
             
-            self.log_progress("PROCESS COMPLETED: DIA-NN analysis workflow finished successfully (simulated)")
+            # Create visualization outputs
+            plots_dir = os.path.join(self.op_folder, "plots")
+            os.makedirs(plots_dir, exist_ok=True)
+            plot_files = ["protein_coverage.svg", "peptide_intensity.svg", "qc_metrics.svg"]
+            for plot_file in plot_files:
+                with open(os.path.join(plots_dir, plot_file), 'w') as f:
+                    f.write(f"<svg width=\"600\" height=\"400\" xmlns=\"http://www.w3.org/2000/svg\">\n")
+                    f.write(f"  <text x=\"50\" y=\"50\">Simulated {plot_file} plot</text>\n")
+                    f.write(f"  <text x=\"50\" y=\"80\">Created at: {timestamp}</text>\n")
+                    f.write(f"</svg>\n")
+                logger.info(f"Created simulated plot file: {plots_dir}/{plot_file}")
+                
+            # Create a summary file
+            summary_file = os.path.join(self.op_folder, f"diann_summary.txt")
+            with open(summary_file, 'w') as f:
+                f.write(f"DIA-NN Analysis Summary\n")
+                f.write(f"Job ID: {self.job_id}\n")
+                f.write(f"Completed at: {timestamp}\n\n")
+                f.write("Summary Statistics:\n")
+                f.write("- Proteins identified: 42\n")
+                f.write("- Peptides identified: 527\n")
+                f.write("- Precursors identified: 1253\n")
+                f.write("- Files processed: 2\n")
+            logger.info(f"Created simulation summary file: {summary_file}")
+
+            # Final completion - 100%
+            self.log_progress("Workflow completed successfully!", 1.0)
+            logger.info(f"DIA-NN Sim Job {self.job_id} completed successfully")
+            
+            # Create a completion marker file to indicate successful completion
+            with open(os.path.join(self.op_folder, f"job_{self.job_id}_completed.marker"), 'w') as f:
+                f.write(f"Job completed at: {timestamp}\n")
+            logger.info(f"Created job completion marker file")
+
             return True
-            
+
         except Exception as e:
-            self.log_progress(f"ERROR: Unhandled exception in simulated DIA-NN workflow: {str(e)}")
-            return False
+            error_msg = f"Error in DIA-NN workflow: {str(e)}"
+            logger.error(f"DIA-NN Sim Job {self.job_id} failed: {error_msg}")
+            self.log_progress(error_msg)
+            raise
 
 def launch_diann_sim_job(job_data, progress_callback=None):
     """
@@ -235,12 +347,13 @@ def launch_diann_sim_job(job_data, progress_callback=None):
             op_folder=output_folder,
             msconvert_path=msconvert_path,
             progress_callback=progress_callback,
+            job_id=job_id,
             **params
         )
         
         # Update job status to running if there's a job ID
         if job_id != 'unknown' and progress_callback:
-            progress_callback(f"JOB_STATUS: {job_id}:running")
+            progress_callback(f"JOB_STATUS:{job_id}:running")
         
         result = handler.run_workflow()
         
@@ -250,12 +363,12 @@ def launch_diann_sim_job(job_data, progress_callback=None):
                 progress_callback("Simulated DIA-NN job completed successfully!")
                 # Update job status to completed if there's a job ID
                 if job_id != 'unknown':
-                    progress_callback(f"JOB_STATUS: {job_id}:completed")
+                    progress_callback(f"JOB_STATUS:{job_id}:completed")
             else:
                 progress_callback("Simulated DIA-NN job failed. Check logs for details.")
                 # Update job status to errored if there's a job ID
                 if job_id != 'unknown':
-                    progress_callback(f"JOB_STATUS: {job_id}:errored")
+                    progress_callback(f"JOB_STATUS:{job_id}:errored")
                 
         return result
         

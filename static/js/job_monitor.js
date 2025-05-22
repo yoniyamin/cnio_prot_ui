@@ -4,8 +4,7 @@ import {
   loadWatchers,
   filterAndDisplayWatchers,
   createWatcher,
-  initWatchersPagination,
-  forceWatcherRescan
+  initWatchersPagination
 } from './watchers.js';
 
 import {
@@ -139,13 +138,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.getElementById('refresh-jobs')?.addEventListener('click', () => loadJobs());
+  document.getElementById('refresh-jobs')?.addEventListener('click', () => loadJobs(true, true));
 
   // Auto-refresh for active pages
   setInterval(() => {
     if (document.visibilityState === 'visible') {
       if (watchersTable) loadWatchers(false);
-      if (jobsTable) loadJobs(false);
+      if (jobsTable) loadJobs(false, true);
 
       // Re-apply highlighting when auto-refreshing (for jobs page)
       if (jobsTable && window.location.search.includes('job_id')) {
@@ -163,7 +162,6 @@ import * as watchersFunctions from './watchers.js';
 window.loadJobs = jobsFunctions.loadJobs;
 window.loadWatchers = watchersFunctions.loadWatchers;
 window.highlightSelectedJob = jobsFunctions.highlightSelectedJob;
-window.forceWatcherRescan = watchersFunctions.forceWatcherRescan;
 
 // Listen for URL changes (for when navigating from dashboard to jobs page)
 let lastUrl = location.href;

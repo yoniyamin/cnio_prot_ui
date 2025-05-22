@@ -1,12 +1,34 @@
 import os
 import io
 from flask import request, jsonify, send_file
-from app_core import app, watcher_db_path, job_queue_manager
-from src.utils import logger, log_dir
+from app_core import app, watcher_db_path, job_queue_manager, watcher_manager
+from src.logging_utils import get_logger, log_dir
 from src.database.watcher_db import WatcherDB
+from src.utils.job_utils import update_job_status_safe
+
+# Get module-specific logger
+logger = get_logger(__name__)
 
 # Initialize database connection
 watcher_db = WatcherDB(watcher_db_path)
+
+def get_db_instance(db_type):
+    """Get appropriate database instance based on type"""
+    global watcher_db
+    
+    if db_type == "jobs":
+        from src.database.jobs_db import JobsDB
+        db_instance = JobsDB(db_path="config/jobs.db")
+        logger.debug(f"Created new JobsDB instance")
+        return db_instance
+    elif db_type == "watchers":
+        logger.debug(f"Returning existing watcher_db instance")
+        return watcher_db
+    else:
+        error_msg = f"Unknown database type: {db_type}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
 @app.route('/api/logs')
 def api_logs():
     try:
@@ -22,6 +44,7 @@ def api_logs():
             log_file = log_files[0] if log_files else None
 
         if not log_file:
+            logger.warning("API request: logs - No log files found")
             return jsonify({"error": "No log files found"}), 404
 
         # Return the log file content
@@ -35,6 +58,9 @@ def api_logs():
             filtered_lines = [line for line in log_content.splitlines()
                               if f" - {level} - " in line]
             log_content = '\n'.join(filtered_lines)
+            logger.info(f"API request: logs - Filtered by level {level}, returning {len(filtered_lines)} lines")
+        else:
+            logger.info(f"API request: logs - Returning full log file {log_file}")
 
         # Return the log with proper headers for text display
         return log_content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
@@ -59,25 +85,28 @@ def api_force_watcher_rescan(watcher_id):
         if watcher_info[8] != 'monitoring':
             return jsonify({"error": f"Watcher {watcher_id} is not in monitoring state (current state: {watcher_info[8]})"}), 400
         
-        # Create a temporary watcher instance to force rescan
-        try:
-            # Import here to avoid circular imports
-            from src.watchers.watcher_manager import WatcherManager
-            watcher_manager = WatcherManager(watcher_db, job_queue_manager)
-            watcher = watcher_manager.create_single_watcher(watcher_id)
-            
-            # Force a rescan of existing files
+        # Get a fresh reference to the watcher_manager to avoid circular import issues
+        from app_core import watcher_manager as current_watcher_manager
+        
+        # Use the existing watcher_manager to force a rescan
+        if current_watcher_manager is not None and watcher_id in current_watcher_manager.watchers:
+            # Use existing watcher
+            current_watcher_manager.watchers[watcher_id].force_rescan()
+            logger.info(f"Forced rescan for existing watcher {watcher_id}")
+        else:
+            if current_watcher_manager is None:
+                logger.error("Global watcher_manager is not initialized, cannot force rescan")
+                return jsonify({"error": "Watcher manager not initialized"}), 500
+                
+            # Create a temporary watcher if needed
+            watcher = current_watcher_manager.create_single_watcher(watcher_id)
             watcher.force_rescan()
-            logger.info(f"Forced rescan for watcher {watcher_id}")
+            logger.info(f"Forced rescan for newly created watcher {watcher_id}")
             
-            return jsonify({"success": True, "message": f"Forced rescan for watcher {watcher_id}"})
-        except Exception as e:
-            logger.error(f"Error forcing rescan: {str(e)}", exc_info=True)
-            return jsonify({"error": f"Error forcing rescan: {str(e)}"}), 500
-
+        return jsonify({"success": True, "message": f"Forced rescan for watcher {watcher_id}"})
     except Exception as e:
-        logger.error(f"Error in force rescan endpoint: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error forcing rescan: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Error forcing rescan: {str(e)}"}), 500
 
 
 
@@ -448,21 +477,24 @@ def api_create_watcher():
         )
 
         # Start the watcher in the WatcherManager
-        # Here you would typically trigger the WatcherManager to load and start the new watcher
         try:
-            # Import here to avoid circular imports
-            from src.watchers.watcher_manager import WatcherManager
-            # Create and start a single watcher
-            watcher_manager = WatcherManager(watcher_db, job_queue_manager)
-            watcher = watcher_manager.create_single_watcher(watcher_id)
-
-            # Start the watcher in a separate thread
-            import threading
-            thread = threading.Thread(target=watcher.start, daemon=True)
-            watcher_manager.threads[watcher_id] = thread  # Store thread reference
-            thread.start()
-
-            logger.info(f"Started new watcher {watcher_id} in thread")
+            # Get a fresh reference to the watcher_manager to avoid circular import issues
+            from app_core import watcher_manager as current_watcher_manager
+            
+            # Create and start the watcher using the fresh reference
+            if current_watcher_manager is not None:
+                watcher = current_watcher_manager.create_single_watcher(watcher_id)
+                
+                # Start the watcher in a separate thread
+                import threading
+                thread = threading.Thread(target=watcher.start, daemon=True, 
+                                        name=f"Watcher-{watcher_id}")
+                current_watcher_manager.threads[watcher_id] = thread  # Store thread reference
+                thread.start()
+                
+                logger.info(f"Started new watcher {watcher_id} in thread")
+            else:
+                logger.error(f"Global watcher_manager is not initialized, cannot start watcher {watcher_id}")
         except Exception as e:
             logger.error(f"Error starting watcher {watcher_id}: {str(e)}", exc_info=True)
             # Continue anyway since the watcher is created in the database
@@ -475,48 +507,137 @@ def api_create_watcher():
 
 @app.route('/api/jobs/<job_id>/stop', methods=['POST'])
 def api_stop_job(job_id):
-    """Stop a running job and its associated watcher"""
+    """Stop a running job and its associated watcher - enhanced logging and part synchronous execution"""
     try:
-        logger.info(f"API request: stop job {job_id}")
+        logger.info(f"JOB STOP: Beginning job stop for {job_id}")
+        response = {"success": False, "actions": []}
 
-        # 1. Update job status in database
-        from src.database.jobs_db import JobsDB
-        jobs_db = JobsDB()
-        jobs_db.update_job_status(job_id, 'cancelled')
-
-        # 2. Get watcher_id from database
-        watcher_id = jobs_db.get_watcher_id_for_job(job_id)
-
-        logger.info(f"Found watcher_id: {watcher_id} for job {job_id}")
-
-        # 3. Handle in-memory job cancellation
-        job_found = False
-        # ... (same code as before) ...
-
-        # 4. Stop the associated watcher by updating status in DB
-        if watcher_id:
+        # Do essential operations synchronously to ensure they happen
+        # 1. Update database record directly
+        try:
+            import sqlite3
+            import os
+            from datetime import datetime
+            
+            db_path = os.path.join("config", "jobs.db")
+            logger.info(f"JOB STOP: Opening database at {db_path}")
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Check if update_time column exists
+            cursor.execute("PRAGMA table_info(jobs)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Update the job status using appropriate SQL based on available columns
+            current_time = datetime.now().isoformat()
+            if 'update_time' in columns:
+                cursor.execute(
+                    "UPDATE jobs SET status = ?, update_time = ? WHERE job_id = ?",
+                    ("cancelled", current_time, job_id)
+                )
+            else:
+                # Fallback if update_time column doesn't exist
+                cursor.execute(
+                    "UPDATE jobs SET status = ? WHERE job_id = ?",
+                    ("cancelled", job_id)
+                )
+            
+            affected_rows = conn.total_changes
+            conn.commit()
+            
+            logger.info(f"JOB STOP: Updated job {job_id} status to cancelled, affected rows: {affected_rows}")
+            response["actions"].append(f"updated_db_rows_{affected_rows}")
+            
+            # Get watcher_id for this job
+            cursor.execute("SELECT watcher_id FROM jobs WHERE job_id = ?", (job_id,))
+            result = cursor.fetchone()
+            watcher_id = result[0] if result else None
+            conn.close()
+            
+            if watcher_id:
+                logger.info(f"JOB STOP: Found watcher_id {watcher_id} for job {job_id}")
+                response["actions"].append(f"found_watcher_{watcher_id}")
+                
+                # Update watcher status
+                try:
+                    # First try to update via the API
+                    try:
+                        from src.database.watcher_db import WatcherDB
+                        from app_core import app, watcher_db_path, job_queue_manager, watcher_manager
+                        watcher_db = WatcherDB(watcher_db_path)
+                        watcher_db.update_watcher_status(int(watcher_id), 'cancelled')
+                        logger.info(f"JOB STOP: Updated watcher {watcher_id} via API")
+                        response["actions"].append("updated_watcher_api")
+                    except Exception as e:
+                        logger.error(f"JOB STOP: Error updating watcher via API: {str(e)}")
+                        
+                        # Fallback to direct SQL
+                        watcher_db_path = os.path.join("config", "watchers.db")
+                        conn = sqlite3.connect(watcher_db_path)
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "UPDATE watchers SET status = ?, completion_time = ? WHERE id = ?",
+                            ("cancelled", datetime.now().isoformat(), watcher_id)
+                        )
+                        affected_rows = conn.total_changes
+                        conn.commit()
+                        conn.close()
+                        logger.info(f"JOB STOP: Updated watcher {watcher_id} via SQL, affected rows: {affected_rows}")
+                        response["actions"].append(f"updated_watcher_sql_{affected_rows}")
+                except Exception as e:
+                    logger.error(f"JOB STOP: All watcher update methods failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"JOB STOP: Database operation failed: {str(e)}")
+            response["errors"] = [f"db_error: {str(e)}"]
+        
+        # 2. Now start a background thread for remaining actions
+        import threading
+        
+        def background_actions():
+            logger.info(f"JOB STOP BACKGROUND: Starting background actions for job {job_id}")
+            
+            # Create cancellation flag file
             try:
-                logger.info(f"Canceling watcher {watcher_id} associated with job {job_id}")
-
-                # Update the watcher status in the database
-                watcher_db.update_watcher_status(int(watcher_id), 'cancelled')
-                logger.info(f"Watcher {watcher_id} status updated to cancelled in database")
-
-                # The watcher thread should detect this status change within 1 second
-                # (based on the status check in FileWatcher.start())
-
+                import os
+                flag_dir = os.path.join("temp", "cancellations")
+                os.makedirs(flag_dir, exist_ok=True)
+                flag_file = os.path.join(flag_dir, f"cancel_{job_id}.flag")
+                
+                with open(flag_file, 'w') as f:
+                    f.write(f"Cancellation at {datetime.now().isoformat()}")
+                
+                logger.info(f"JOB STOP BACKGROUND: Created flag file at {flag_file}")
             except Exception as e:
-                logger.error(f"Error canceling watcher {watcher_id}: {str(e)}", exc_info=True)
-
-        return jsonify({
-            "success": True,
-            "message": f"Job {job_id} cancelled" +
-                       (f" and watcher {watcher_id} status updated to cancelled" if watcher_id else "")
-        })
-
+                logger.error(f"JOB STOP BACKGROUND: Error creating flag file: {str(e)}")
+            
+            # Try to update in-memory job object
+            try:
+                from app_core import job_queue_manager
+                if job_id in job_queue_manager.running_jobs:
+                    job = job_queue_manager.running_jobs.get(job_id)
+                    if job and hasattr(job, 'change_job_status'):
+                        job.change_job_status('cancelled')
+                        logger.info(f"JOB STOP BACKGROUND: Updated in-memory job status")
+            except Exception as e:
+                logger.error(f"JOB STOP BACKGROUND: Error updating in-memory job: {str(e)}")
+            
+            logger.info(f"JOB STOP BACKGROUND: Completed background actions for job {job_id}")
+        
+        # Start background thread
+        bg_thread = threading.Thread(target=background_actions)
+        bg_thread.daemon = True
+        bg_thread.start()
+        
+        # Mark as success since we updated the database
+        response["success"] = True
+        logger.info(f"JOB STOP: Returning success response with actions: {response['actions']}")
+        
+        return response
+        
     except Exception as e:
-        logger.error(f"Error stopping job {job_id}: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"JOB STOP: Fatal error in stop endpoint: {str(e)}", exc_info=True)
+        return {"error": str(e), "success": False}, 500
 
 
 @app.route('/api/jobs/<job_id>/demands')
@@ -597,3 +718,233 @@ def api_get_job_files(job_id):
     except Exception as e:
         logger.error(f"Error getting job files: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/jobs/<job_id>/emergency-stop', methods=['POST'])
+def api_emergency_stop_job(job_id):
+    """Emergency endpoint to stop a job using direct database access and minimal dependencies"""
+    try:
+        import sqlite3
+        import os
+        import time
+        import json
+        from datetime import datetime
+        
+        response = {
+            "success": False,
+            "actions": [],
+            "errors": []
+        }
+        
+        # Log the request
+        print(f"EMERGENCY: Received request to stop job {job_id}")
+        response["actions"].append("request_received")
+        
+        # 1. Direct database update for jobs - absolute minimal approach
+        try:
+            db_path = os.path.join("config", "jobs.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Check for update_time column
+            cursor.execute("PRAGMA table_info(jobs)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Use appropriate SQL based on available columns
+            current_time = datetime.now().isoformat()
+            if 'update_time' in columns:
+                cursor.execute(
+                    "UPDATE jobs SET status = ?, update_time = ? WHERE job_id = ?",
+                    ("cancelled", current_time, job_id)
+                )
+            else:
+                # Fallback if update_time column doesn't exist
+                cursor.execute(
+                    "UPDATE jobs SET status = ? WHERE job_id = ?",
+                    ("cancelled", job_id)
+                )
+                
+            affected = conn.total_changes
+            conn.commit()
+            conn.close()
+            
+            response["actions"].append(f"updated_job_status_direct_sql_{affected}")
+            print(f"EMERGENCY: Updated job {job_id} status to cancelled using direct SQL")
+        except Exception as e:
+            error_msg = str(e)
+            response["errors"].append(f"db_update_error: {error_msg}")
+            print(f"EMERGENCY: Error updating job status: {error_msg}")
+        
+        # 2. Create cancellation flag file - no database dependency
+        try:
+            # Create a physical file that the system can check
+            flag_dir = os.path.join("temp", "cancellations")
+            os.makedirs(flag_dir, exist_ok=True)
+            flag_file = os.path.join(flag_dir, f"emergency_cancel_{job_id}.flag")
+            with open(flag_file, 'w') as f:
+                f.write(f"Emergency cancellation at {time.time()}")
+            
+            response["actions"].append("created_flag_file")
+            print(f"EMERGENCY: Created cancellation flag file: {flag_file}")
+        except Exception as e:
+            error_msg = str(e)
+            response["errors"].append(f"flag_file_error: {error_msg}")
+            print(f"EMERGENCY: Error creating flag file: {error_msg}")
+        
+        # 3. Find and update watcher status directly
+        try:
+            # Get watcher_id directly from database
+            db_path = os.path.join("config", "jobs.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT watcher_id FROM jobs WHERE job_id = ?", (job_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            watcher_id = result[0] if result else None
+            
+            if watcher_id:
+                response["actions"].append(f"found_watcher_id_{watcher_id}")
+                print(f"EMERGENCY: Found watcher_id {watcher_id} for job {job_id}")
+                
+                # Update watcher status directly
+                watcher_db_path = os.path.join("config", "watchers.db")
+                conn = sqlite3.connect(watcher_db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute(
+                    "UPDATE watchers SET status = ?, completion_time = ? WHERE id = ?",
+                    ("cancelled", datetime.now().isoformat(), watcher_id)
+                )
+                affected = conn.total_changes
+                conn.commit()
+                conn.close()
+                
+                response["actions"].append(f"updated_watcher_status_direct_sql_{affected}")
+                print(f"EMERGENCY: Updated watcher {watcher_id} status to cancelled using direct SQL")
+        except Exception as e:
+            error_msg = str(e)
+            response["errors"].append(f"watcher_update_error: {error_msg}")
+            print(f"EMERGENCY: Error updating watcher: {error_msg}")
+        
+        # If we got here, at least the endpoint responded
+        response["success"] = True
+        return json.dumps(response), 200, {'Content-Type': 'application/json'}
+    
+    except Exception as e:
+        # Use simplest possible error response with no dependencies
+        return f"EMERGENCY STOP ERROR: {str(e)}", 500
+
+@app.route('/api/jobs/<job_id>/direct-stop', methods=['POST'])
+def api_direct_stop_job(job_id):
+    """Direct endpoint to stop a job using only SQL commands"""
+    try:
+        # Log to both console and logger
+        logger.info(f"DIRECT STOP: Starting emergency stop for job {job_id}")
+        
+        response = {
+            "success": False,
+            "actions": [],
+            "errors": []
+        }
+        
+        # 1. Update job status directly with SQL
+        try:
+            import sqlite3
+            import os
+            from datetime import datetime
+            
+            # Update job in jobs.db
+            db_path = os.path.join("config", "jobs.db")
+            logger.info(f"DIRECT STOP: Opening database at {db_path}")
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get current time for updates
+            current_time = datetime.now().isoformat()
+            
+            # Check if update_time column exists
+            cursor.execute("PRAGMA table_info(jobs)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Update the job status using appropriate SQL based on available columns
+            if 'update_time' in columns:
+                cursor.execute(
+                    "UPDATE jobs SET status = ?, update_time = ? WHERE job_id = ?",
+                    ("cancelled", current_time, job_id)
+                )
+            else:
+                # Fallback if update_time column doesn't exist
+                cursor.execute(
+                    "UPDATE jobs SET status = ? WHERE job_id = ?",
+                    ("cancelled", job_id)
+                )
+                
+            affected_rows = conn.total_changes
+            conn.commit()
+            
+            response["actions"].append(f"Updated job status, rows affected: {affected_rows}")
+            logger.info(f"DIRECT STOP: Updated job {job_id} status to cancelled, affected rows: {affected_rows}")
+            
+            # Get watcher_id for this job
+            cursor.execute("SELECT watcher_id FROM jobs WHERE job_id = ?", (job_id,))
+            result = cursor.fetchone()
+            watcher_id = result[0] if result else None
+            conn.close()
+            
+            if watcher_id:
+                response["actions"].append(f"Found watcher_id: {watcher_id}")
+                logger.info(f"DIRECT STOP: Found watcher_id {watcher_id} for job {job_id}")
+                
+                # Update watcher in watchers.db
+                watcher_db_path = os.path.join("config", "watchers.db")
+                logger.info(f"DIRECT STOP: Opening watcher database at {watcher_db_path}")
+                
+                conn = sqlite3.connect(watcher_db_path)
+                cursor = conn.cursor()
+                
+                # Update the watcher status
+                cursor.execute(
+                    "UPDATE watchers SET status = ?, completion_time = ? WHERE id = ?",
+                    ("cancelled", current_time, watcher_id)
+                )
+                affected_rows = conn.total_changes
+                conn.commit()
+                conn.close()
+                
+                response["actions"].append(f"Updated watcher status, rows affected: {affected_rows}")
+                logger.info(f"DIRECT STOP: Updated watcher {watcher_id} status to cancelled, affected rows: {affected_rows}")
+            
+            # Try to create a cancellation flag file
+            try:
+                flag_dir = os.path.join("temp", "emergency")
+                os.makedirs(flag_dir, exist_ok=True)
+                flag_file = os.path.join(flag_dir, f"cancel_{job_id}.flag")
+                
+                with open(flag_file, 'w') as f:
+                    f.write(f"Cancellation requested at {current_time}")
+                
+                response["actions"].append(f"Created flag file at {flag_file}")
+                logger.info(f"DIRECT STOP: Created cancellation flag file at {flag_file}")
+            except Exception as e:
+                logger.error(f"DIRECT STOP: Error creating flag file: {str(e)}")
+                response["errors"].append(f"Flag file error: {str(e)}")
+            
+            # Mark as success
+            response["success"] = True
+            
+        except Exception as e:
+            error_msg = f"Database error: {str(e)}"
+            logger.error(f"DIRECT STOP: {error_msg}")
+            response["errors"].append(error_msg)
+        
+        # Log complete response
+        logger.info(f"DIRECT STOP: Completed with response: {response}")
+        
+        return response
+        
+    except Exception as e:
+        error_msg = f"Emergency stop failed: {str(e)}"
+        logger.error(f"DIRECT STOP: {error_msg}", exc_info=True)
+        return {"error": error_msg, "success": False}, 500
